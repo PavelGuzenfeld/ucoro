@@ -173,7 +173,7 @@ namespace coro
 }
 
 // ============================================================================
-// fmt Support (Using {fmt} library instead of std::format)
+// fmt Support
 // ============================================================================
 
 template <>
@@ -208,7 +208,7 @@ namespace coro
 
         extern thread_local struct mco_coro *mco_current_co;
 
-        // Default Allocators (Defined inline to avoid linkage issues)
+        // Default Allocators
         inline void *mco_alloc(std::size_t size, void *allocator_data)
         {
             (void)allocator_data;
@@ -255,13 +255,32 @@ namespace coro
             std::size_t stack_size = 0;
         };
 
-#if defined(__x86_64__) && !defined(_WIN32)
+        // ------------------- Architecture Detection -------------------
+
+#if defined(_WIN32) && (defined(_M_X64) || defined(__x86_64__))
+        // Windows x64
+        struct mco_ctxbuf
+        {
+            void *rip, *rsp, *rbp, *rbx, *r12, *r13, *r14, *r15, *rdi, *rsi;
+            void *xmm[20];
+            void *fiber_storage;
+            void *dealloc_stack;
+            void *stack_limit;
+            void *stack_base;
+        };
+        // Function pointers for Windows assembly blobs
+        extern void (*_mco_switch)(mco_ctxbuf *from, mco_ctxbuf *to);
+
+#elif defined(__x86_64__) && !defined(_WIN32)
+        // x86_64 Linux/macOS
         struct mco_ctxbuf
         {
             void *rip, *rsp, *rbp, *rbx, *r12, *r13, *r14, *r15;
         };
+        extern "C" void _mco_switch(mco_ctxbuf *from, mco_ctxbuf *to);
 
 #elif defined(__aarch64__) && !defined(_WIN32)
+        // ARM64 Linux/macOS
         struct mco_ctxbuf
         {
             void *x[12]; /* x19-x30 */
@@ -269,8 +288,9 @@ namespace coro
             void *lr;
             void *d[8]; /* d8-d15 */
         };
+        extern "C" void _mco_switch(mco_ctxbuf *from, mco_ctxbuf *to);
 #else
-#error "Only x86_64/ARM64 Linux/macOS supported in this version."
+#error "Only x86_64/ARM64 Linux/macOS and Windows x64 supported in this version."
 #endif
 
         struct mco_context
@@ -278,7 +298,6 @@ namespace coro
             mco_ctxbuf ctx;
             mco_ctxbuf back_ctx;
         };
-        extern "C" int _mco_switch(mco_ctxbuf *from, mco_ctxbuf *to);
 
         // ============================================================================
         // Constexpr Helpers
@@ -772,9 +791,392 @@ namespace coro::detail
 {
     thread_local mco_coro *mco_current_co = nullptr;
 
+#if defined(_WIN32) && (defined(_M_X64) || defined(__x86_64__))
+// -----------------------------------------------------------------------------------------
+// Windows x64 Implementation (via raw assembly blobs)
+// -----------------------------------------------------------------------------------------
+#pragma section(".text")
+#define MCO_ASM_BLOB __declspec(allocate(".text"))
+
+    MCO_ASM_BLOB static unsigned char _mco_wrap_main_code[] = {
+        0x4c, 0x89, 0xe9,                                    /* mov    %r13,%rcx */
+        0x41, 0xff, 0xe4,                                    /* jmpq   *%r12 */
+        0xc3,                                                /* retq */
+        0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90 /* nop */
+    };
+
+    MCO_ASM_BLOB static unsigned char _mco_switch_code[] = {
+        0x48,
+        0x8d,
+        0x05,
+        0x3e,
+        0x01,
+        0x00,
+        0x00, /* lea    0x13e(%rip),%rax    */
+        0x48,
+        0x89,
+        0x01, /* mov    %rax,(%rcx)         */
+        0x48,
+        0x89,
+        0x61,
+        0x08, /* mov    %rsp,0x8(%rcx)      */
+        0x48,
+        0x89,
+        0x69,
+        0x10, /* mov    %rbp,0x10(%rcx)     */
+        0x48,
+        0x89,
+        0x59,
+        0x18, /* mov    %rbx,0x18(%rcx)     */
+        0x4c,
+        0x89,
+        0x61,
+        0x20, /* mov    %r12,0x20(%rcx)     */
+        0x4c,
+        0x89,
+        0x69,
+        0x28, /* mov    %r13,0x28(%rcx)     */
+        0x4c,
+        0x89,
+        0x71,
+        0x30, /* mov    %r14,0x30(%rcx)     */
+        0x4c,
+        0x89,
+        0x79,
+        0x38, /* mov    %r15,0x38(%rcx)     */
+        0x48,
+        0x89,
+        0x79,
+        0x40, /* mov    %rdi,0x40(%rcx)     */
+        0x48,
+        0x89,
+        0x71,
+        0x48, /* mov    %rsi,0x48(%rcx)     */
+        0x0f,
+        0x11,
+        0x71,
+        0x50, /* movups %xmm6,0x50(%rcx)    */
+        0x0f,
+        0x11,
+        0x79,
+        0x60, /* movups %xmm7,0x60(%rcx)    */
+        0x44,
+        0x0f,
+        0x11,
+        0x41,
+        0x70, /* movups %xmm8,0x70(%rcx)    */
+        0x44,
+        0x0f,
+        0x11,
+        0x89,
+        0x80,
+        0x00,
+        0x00,
+        0x00, /* movups %xmm9,0x80(%rcx)    */
+        0x44,
+        0x0f,
+        0x11,
+        0x91,
+        0x90,
+        0x00,
+        0x00,
+        0x00, /* movups %xmm10,0x90(%rcx)   */
+        0x44,
+        0x0f,
+        0x11,
+        0x99,
+        0xa0,
+        0x00,
+        0x00,
+        0x00, /* movups %xmm11,0xa0(%rcx)   */
+        0x44,
+        0x0f,
+        0x11,
+        0xa1,
+        0xb0,
+        0x00,
+        0x00,
+        0x00, /* movups %xmm12,0xb0(%rcx)   */
+        0x44,
+        0x0f,
+        0x11,
+        0xa9,
+        0xc0,
+        0x00,
+        0x00,
+        0x00, /* movups %xmm13,0xc0(%rcx)   */
+        0x44,
+        0x0f,
+        0x11,
+        0xb1,
+        0xd0,
+        0x00,
+        0x00,
+        0x00, /* movups %xmm14,0xd0(%rcx)   */
+        0x44,
+        0x0f,
+        0x11,
+        0xb9,
+        0xe0,
+        0x00,
+        0x00,
+        0x00, /* movups %xmm15,0xe0(%rcx)   */
+        0x65,
+        0x4c,
+        0x8b,
+        0x14,
+        0x25,
+        0x30,
+        0x00,
+        0x00,
+        0x00, /* mov    %gs:0x30,%r10       */
+        0x49,
+        0x8b,
+        0x42,
+        0x20, /* mov    0x20(%r10),%rax     */
+        0x48,
+        0x89,
+        0x81,
+        0xf0,
+        0x00,
+        0x00,
+        0x00, /* mov    %rax,0xf0(%rcx)     */
+        0x49,
+        0x8b,
+        0x82,
+        0x78,
+        0x14,
+        0x00,
+        0x00, /* mov    0x1478(%r10),%rax   */
+        0x48,
+        0x89,
+        0x81,
+        0xf8,
+        0x00,
+        0x00,
+        0x00, /* mov    %rax,0xf8(%rcx)     */
+        0x49,
+        0x8b,
+        0x42,
+        0x10, /* mov    0x10(%r10),%rax     */
+        0x48,
+        0x89,
+        0x81,
+        0x00,
+        0x01,
+        0x00,
+        0x00, /* mov    %rax,0x100(%rcx)    */
+        0x49,
+        0x8b,
+        0x42,
+        0x08, /* mov    0x8(%r10),%rax      */
+        0x48,
+        0x89,
+        0x81,
+        0x08,
+        0x01,
+        0x00,
+        0x00, /* mov    %rax,0x108(%rcx)    */
+        0x48,
+        0x8b,
+        0x82,
+        0x08,
+        0x01,
+        0x00,
+        0x00, /* mov    0x108(%rdx),%rax    */
+        0x49,
+        0x89,
+        0x42,
+        0x08, /* mov    %rax,0x8(%r10)      */
+        0x48,
+        0x8b,
+        0x82,
+        0x00,
+        0x01,
+        0x00,
+        0x00, /* mov    0x100(%rdx),%rax    */
+        0x49,
+        0x89,
+        0x42,
+        0x10, /* mov    %rax,0x10(%r10)     */
+        0x48,
+        0x8b,
+        0x82,
+        0xf8,
+        0x00,
+        0x00,
+        0x00, /* mov    0xf8(%rdx),%rax     */
+        0x49,
+        0x89,
+        0x82,
+        0x78,
+        0x14,
+        0x00,
+        0x00, /* mov    %rax,0x1478(%r10)   */
+        0x48,
+        0x8b,
+        0x82,
+        0xf0,
+        0x00,
+        0x00,
+        0x00, /* mov    0xf0(%rdx),%rax     */
+        0x49,
+        0x89,
+        0x42,
+        0x20, /* mov    %rax,0x20(%r10)     */
+        0x44,
+        0x0f,
+        0x10,
+        0xba,
+        0xe0,
+        0x00,
+        0x00,
+        0x00, /* movups 0xe0(%rdx),%xmm15   */
+        0x44,
+        0x0f,
+        0x10,
+        0xb2,
+        0xd0,
+        0x00,
+        0x00,
+        0x00, /* movups 0xd0(%rdx),%xmm14   */
+        0x44,
+        0x0f,
+        0x10,
+        0xaa,
+        0xc0,
+        0x00,
+        0x00,
+        0x00, /* movups 0xc0(%rdx),%xmm13   */
+        0x44,
+        0x0f,
+        0x10,
+        0xa2,
+        0xb0,
+        0x00,
+        0x00,
+        0x00, /* movups 0xb0(%rdx),%xmm12   */
+        0x44,
+        0x0f,
+        0x10,
+        0x9a,
+        0xa0,
+        0x00,
+        0x00,
+        0x00, /* movups 0xa0(%rdx),%xmm11   */
+        0x44,
+        0x0f,
+        0x10,
+        0x92,
+        0x90,
+        0x00,
+        0x00,
+        0x00, /* movups 0x90(%rdx),%xmm10   */
+        0x44,
+        0x0f,
+        0x10,
+        0x8a,
+        0x80,
+        0x00,
+        0x00,
+        0x00, /* movups 0x80(%rdx),%xmm9    */
+        0x44,
+        0x0f,
+        0x10,
+        0x42,
+        0x70, /* movups 0x70(%rdx),%xmm8    */
+        0x0f,
+        0x10,
+        0x7a,
+        0x60, /* movups 0x60(%rdx),%xmm7    */
+        0x0f,
+        0x10,
+        0x72,
+        0x50, /* movups 0x50(%rdx),%xmm6    */
+        0x48,
+        0x8b,
+        0x72,
+        0x48, /* mov    0x48(%rdx),%rsi     */
+        0x48,
+        0x8b,
+        0x7a,
+        0x40, /* mov    0x40(%rdx),%rdi     */
+        0x4c,
+        0x8b,
+        0x7a,
+        0x38, /* mov    0x38(%rdx),%r15     */
+        0x4c,
+        0x8b,
+        0x72,
+        0x30, /* mov    0x30(%rdx),%r14     */
+        0x4c,
+        0x8b,
+        0x6a,
+        0x28, /* mov    0x28(%rdx),%r13     */
+        0x4c,
+        0x8b,
+        0x62,
+        0x20, /* mov    0x20(%rdx),%r12     */
+        0x48,
+        0x8b,
+        0x5a,
+        0x18, /* mov    0x18(%rdx),%rbx     */
+        0x48,
+        0x8b,
+        0x6a,
+        0x10, /* mov    0x10(%rdx),%rbp     */
+        0x48,
+        0x8b,
+        0x62,
+        0x08, /* mov    0x8(%rdx),%rsp      */
+        0xff,
+        0x22, /* jmpq   *(%rdx)             */
+        0xc3, /* retq                       */
+        0x90,
+        0x90,
+        0x90,
+        0x90,
+        0x90,
+        0x90,
+        0x90,
+        0x90, /* nop                        */
+        0x90,
+        0x90, /* nop                        */
+    };
+
+    void (*_mco_wrap_main)(void) = (void (*)(void))(void *)_mco_wrap_main_code;
+    void (*_mco_switch)(mco_ctxbuf *from, mco_ctxbuf *to) = (void (*)(mco_ctxbuf *from, mco_ctxbuf *to))(void *)_mco_switch_code;
+
+    static void mco_main(mco_coro *co);
+
+    static mco_result mco_makectx(mco_coro *co, mco_ctxbuf *ctx, void *stack_base, std::size_t stack_size)
+    {
+        stack_size = stack_size - 32; /* Reserve 32 bytes for the shadow space. */
+        std::uintptr_t base_addr = reinterpret_cast<std::uintptr_t>(stack_base);
+        std::uintptr_t high_addr = base_addr + stack_size - sizeof(std::size_t);
+
+        void **stack_high_ptr = reinterpret_cast<void **>(high_addr);
+        stack_high_ptr[0] = reinterpret_cast<void *>(0xdeaddeaddeaddead);
+
+        ctx->rip = reinterpret_cast<void *>(_mco_wrap_main);
+        ctx->rsp = static_cast<void *>(stack_high_ptr);
+        ctx->r12 = reinterpret_cast<void *>(mco_main);
+        ctx->r13 = static_cast<void *>(co);
+
+        void *stack_top = reinterpret_cast<void *>(base_addr + stack_size);
+        ctx->stack_base = stack_top;
+        ctx->stack_limit = stack_base;
+        ctx->dealloc_stack = stack_base;
+
+        return mco_result::success;
+    }
+
+#elif defined(__x86_64__) && !defined(_WIN32)
+    // -----------------------------------------------------------------------------------------
+    // Linux/macOS x64 Implementation
+    // -----------------------------------------------------------------------------------------
     extern "C" void _mco_wrap_main(void);
 
-#if defined(__x86_64__) && !defined(_WIN32)
     __asm__(
         ".text\n"
 #ifdef __MACH__
@@ -847,6 +1249,10 @@ namespace coro::detail
     }
 
 #elif defined(__aarch64__) && !defined(_WIN32)
+    // -----------------------------------------------------------------------------------------
+    // Linux/macOS ARM64 Implementation
+    // -----------------------------------------------------------------------------------------
+    extern "C" void _mco_wrap_main(void);
 
     __asm__(
         ".text\n"
@@ -930,6 +1336,10 @@ namespace coro::detail
 #else
 #error "Only x86_64 and ARM64 Linux/macOS supported in this stripped version."
 #endif
+
+    // -----------------------------------------------------------------------------------------
+    // Common Implementation
+    // -----------------------------------------------------------------------------------------
 
     static void mco_main(mco_coro *co)
     {
