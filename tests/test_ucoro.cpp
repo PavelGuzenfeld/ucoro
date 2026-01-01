@@ -174,15 +174,15 @@ TEST_SUITE("coroutine")
 
         CHECK(step == 0);
 
-        coro.resume();
+        (void)coro.resume();
         CHECK(step == 1);
         CHECK(coro.suspended());
 
-        coro.resume();
+        (void)coro.resume();
         CHECK(step == 2);
         CHECK(coro.suspended());
 
-        coro.resume();
+        (void)coro.resume();
         CHECK(step == 3);
         CHECK(coro.done());
     }
@@ -204,7 +204,7 @@ TEST_SUITE("coroutine")
 
         for (int i = 0; i < 5; ++i)
         {
-            coro.resume();
+            (void)coro.resume();
             CHECK(values.size() == static_cast<size_t>(i + 1));
         }
 
@@ -294,7 +294,7 @@ TEST_SUITE("storage")
         auto push_result = coro.push(42);
         CHECK(push_result.has_value());
 
-        coro.resume();
+        (void)coro.resume();
         CHECK(received == 42);
     }
 
@@ -322,7 +322,7 @@ TEST_SUITE("storage")
         auto push_result = coro.push(sent);
         CHECK(push_result.has_value());
 
-        coro.resume();
+        (void)coro.resume();
         CHECK(received.a == 123);
         CHECK(received.b == doctest::Approx(3.14f));
         CHECK(received.c == 'X');
@@ -348,8 +348,8 @@ TEST_SUITE("storage")
         REQUIRE(result.has_value());
         auto &coro = *result;
 
-        coro.push(42);
-        coro.resume();
+        (void)coro.push(42);
+        (void)coro.resume();
     }
 
     TEST_CASE("bytes_stored tracks usage")
@@ -362,10 +362,10 @@ TEST_SUITE("storage")
 
         CHECK(coro.bytes_stored() == 0);
 
-        coro.push(42);
+        (void)coro.push(42);
         CHECK(coro.bytes_stored() == sizeof(int));
 
-        coro.push(3.14);
+        (void)coro.push(3.14);
         CHECK(coro.bytes_stored() == sizeof(int) + sizeof(double));
     }
 
@@ -378,7 +378,7 @@ TEST_SUITE("storage")
             CHECK(pop_result.error() == coro::error::not_enough_space); });
 
         REQUIRE(result.has_value());
-        result->resume();
+        (void)result->resume();
     }
 
     TEST_CASE("multiple values LIFO order")
@@ -402,12 +402,12 @@ TEST_SUITE("storage")
         auto &coro = *result;
 
         // push in order 1, 2, 3
-        coro.push(1);
-        coro.push(2);
-        coro.push(3);
+        (void)coro.push(1);
+        (void)coro.push(2);
+        (void)coro.push(3);
 
         // pop will be 3, 2, 1 (LIFO)
-        coro.resume();
+        (void)coro.resume();
     }
 }
 
@@ -630,7 +630,7 @@ TEST_SUITE("task_runner")
         runner.add(std::move(*short_task));
         runner.add(std::move(*long_task));
 
-        runner.run();
+        (void)runner.run();
 
         // short task finishes first, long task continues
         CHECK(log.size() == 4);
@@ -698,7 +698,7 @@ TEST_SUITE("edge cases")
 
         while (!coro.done())
         {
-            coro.resume();
+            (void)coro.resume();
         }
 
         CHECK(depth == max_depth);
@@ -715,7 +715,7 @@ TEST_SUITE("edge cases")
             completed = true; });
 
         REQUIRE(result.has_value());
-        result->resume();
+        (void)result->resume();
         CHECK(completed);
     }
 
@@ -735,7 +735,7 @@ TEST_SUITE("edge cases")
             valid_inside = handle.valid(); });
 
         REQUIRE(result.has_value());
-        result->resume();
+        (void)result->resume();
         CHECK(valid_inside);
     }
 
@@ -769,11 +769,11 @@ TEST_SUITE("edge cases")
         auto push_result = coro.push(sent);
         CHECK(push_result.has_value());
 
-        coro.resume();
+        (void)coro.resume();
 
-        for (int i = 0; i < 100; ++i)
+        for (std::size_t i = 0; i < 100; ++i)
         {
-            CHECK(received.values[i] == i);
+            CHECK(received.values[i] == static_cast<int>(i));
         }
     }
 }
