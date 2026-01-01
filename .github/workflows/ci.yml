@@ -1,0 +1,72 @@
+name: CI
+
+on:
+    push:
+        branches: ["main", "master"]
+    pull_request:
+        branches: ["main", "master"]
+
+jobs:
+    build:
+        name: ${{ matrix.os }} - ${{ matrix.compiler }}
+        runs-on: ${{ matrix.os }}
+        strategy:
+            fail-fast: false
+            matrix:
+                include:
+                    - os: ubuntu-22.04
+                      compiler: gcc
+                      cc: gcc-11
+                      cxx: g++-11
+                    - os: ubuntu-22.04
+                      compiler: clang
+                      cc: clang-14
+                      cxx: clang++-14
+                    - os: macos-14
+                      compiler: apple-clang
+                      # Uses default Xcode compiler on macOS 14 (ARM64)
+                    - os: windows-2022
+                      compiler: msvc
+                      # Uses default MSVC
+
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Set up dependencies (Linux)
+              if: runner.os == 'Linux'
+              run: |
+                  sudo apt-get update
+                  sudo apt-get install -y cmake ninja-build
+
+            - name: Configure CMake
+              run: |
+                  cmake -B build -G "Ninja" -DCMAKE_BUILD_TYPE=Release \
+                    -DUCRO_BUILD_TESTS=ON \
+                    -DUCRO_BUILD_EXAMPLES=ON \
+                    -DUCRO_BUILD_BENCHMARKS=ON
+              env:
+                  CC: ${{ matrix.cc }}
+                  CXX: ${{ matrix.cxx }}
+              if: runner.os != 'Windows'
+
+            - name: Configure CMake (Windows)
+              run: |
+                  cmake -B build -DCMAKE_BUILD_TYPE=Release ^
+                    -DUCRO_BUILD_TESTS=ON ^
+                    -DUCRO_BUILD_EXAMPLES=ON ^
+                    -DUCRO_BUILD_BENCHMARKS=ON
+              if: runner.os == 'Windows'
+
+            - name: Build
+              run: cmake --build build --config Release
+
+            - name: Run Tests
+              working-directory: build
+              run: ctest --output-on-failure -C Release
+
+            - name: Run Benchmarks
+              working-directory: build
+              run: |
+                  ./benchmark_ucoro || .\Release\benchmark_ucoro.exe
+              # Simple conditional execution for bash/powershell
+              continue-on-error: true
