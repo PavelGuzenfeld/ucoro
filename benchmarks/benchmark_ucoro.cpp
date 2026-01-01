@@ -12,6 +12,16 @@
 #include <print>
 #include <vector>
 
+// --- Optional Dependencies ---
+
+#ifdef HAVE_UCONTEXT
+#include <ucontext.h>
+#endif
+
+#ifdef HAVE_BOOST_CONTEXT
+#include <boost/context/fiber.hpp>
+#endif
+
 // ============================================================================
 // timing utilities
 // ============================================================================
@@ -98,72 +108,225 @@ public:
 };
 
 // ============================================================================
-// benchmarks
+// Raw C Functions (for comparison)
+// ============================================================================
+
+void raw_noop(coro::detail::mco_coro *) {}
+
+void raw_yield_loop(coro::detail::mco_coro *co)
+{
+    while (true)
+    {
+        coro::detail::mco_yield(co);
+    }
+}
+
+void raw_storage_loop(coro::detail::mco_coro *co)
+{
+    int val;
+    while (true)
+    {
+        coro::detail::mco_pop(co, &val, sizeof(int));
+        coro::detail::mco_yield(co);
+    }
+}
+
+// ============================================================================
+// Benchmarks
 // ============================================================================
 
 void bench_create_destroy()
 {
-    auto result = benchmark::run("coroutine create + destroy", 100'000, []()
-                                 {
-                                     auto coro = coro::coroutine::create([](coro::coroutine_handle) {});
-                                     // destructor runs here
-                                 });
+    // C++ Wrapper
+    auto result = benchmark::run("coroutine create + destroy (C++ wrapper)", 100'000, []()
+                                 { auto coro = coro::coroutine::create([](coro::coroutine_handle) {}); });
     benchmark::print_result(result);
+
+    // Raw C API
+    auto result_raw = benchmark::run("coroutine create + destroy (Raw C API)", 100'000, []()
+                                     {
+        coro::detail::mco_desc desc = coro::detail::mco_desc_init(raw_noop, 0);
+        coro::detail::mco_coro* co = nullptr;
+        coro::detail::mco_create(&co, &desc);
+        coro::detail::mco_destroy(co); });
+    benchmark::print_result(result_raw);
 }
+
+// ---------------------------------------------------------
+// Context Switch Benchmarks (The Main Event)
+// ---------------------------------------------------------
+
+#ifdef HAVE_UCONTEXT
+ucontext_t uctx_main, uctx_func;
+char uctx_stack[1024 * 64];
+
+void ucontext_func()
+{
+    while (true)
+    {
+        swapcontext(&uctx_func, &uctx_main);
+    }
+}
+#endif
 
 void bench_context_switch()
 {
-    // create a coroutine that yields many times
-    auto coro_result = coro::coroutine::create([](coro::coroutine_handle h)
-                                               {
-        for (int i = 0; i < 1'000'000; ++i) {
-            [[maybe_unused]] auto _ = h.yield();
-        } });
-
-    if (!coro_result)
+    // 1. ucoro (C++ Wrapper Safe)
     {
-        std::println(stderr, "failed to create coroutine for context switch benchmark");
-        return;
+        auto coro_result = coro::coroutine::create([](coro::coroutine_handle h)
+                                                   {
+            while(true) {
+                [[maybe_unused]] auto _ = h.yield();
+            } });
+
+        if (coro_result)
+        {
+            auto &coro = *coro_result;
+            auto result = benchmark::run("context switch (ucoro C++ Safe)", 1'000'000, [&coro]()
+                                         { [[maybe_unused]] auto _ = coro.resume(); });
+            benchmark::print_result(result);
+        }
     }
 
-    auto &coro = *coro_result;
+    // 1.5. ucoro (C++ Wrapper UNCHECKED)
+    {
+        auto coro_result = coro::coroutine::create([](coro::coroutine_handle h)
+                                                   {
+            while(true) {
+                h.yield_unchecked(); // FAST PATH
+            } });
 
-    auto result = benchmark::run("context switch (yield + resume)", 1'000'000, [&coro]()
-                                 { [[maybe_unused]] auto _ = coro.resume(); });
-    benchmark::print_result(result);
+        if (coro_result)
+        {
+            auto &coro = *coro_result;
+            auto result = benchmark::run("context switch (ucoro C++ UNCHECKED)", 1'000'000, [&coro]()
+                                         {
+                                             coro.resume_unchecked(); // FAST PATH
+                                         });
+            benchmark::print_result(result);
+        }
+    }
+
+    // 2. ucoro (Raw C API)
+    {
+        coro::detail::mco_desc desc = coro::detail::mco_desc_init(raw_yield_loop, 0);
+        coro::detail::mco_coro *raw_co = nullptr;
+        coro::detail::mco_create(&raw_co, &desc);
+
+        auto result_raw = benchmark::run("context switch (ucoro Raw C API)", 1'000'000, [raw_co]()
+                                         { coro::detail::mco_resume(raw_co); });
+        benchmark::print_result(result_raw);
+        coro::detail::mco_destroy(raw_co);
+    }
+
+    // 3. ucontext (POSIX)
+#ifdef HAVE_UCONTEXT
+    {
+        getcontext(&uctx_func);
+        uctx_func.uc_stack.ss_sp = uctx_stack;
+        uctx_func.uc_stack.ss_size = sizeof(uctx_stack);
+        uctx_func.uc_link = &uctx_main;
+        makecontext(&uctx_func, ucontext_func, 0);
+
+        auto result_uctx = benchmark::run("context switch (ucontext POSIX)", 1'000'000, []()
+                                          { swapcontext(&uctx_main, &uctx_func); });
+        benchmark::print_result(result_uctx);
+    }
+#else
+    std::println("Skipping ucontext benchmark (not supported/enabled)");
+#endif
+
+    // 4. Boost.Context
+#ifdef HAVE_BOOST_CONTEXT
+    {
+        namespace ctx = boost::context;
+        // fixed-size stack allows fairer comparison to ucoro/ucontext default stacks
+        ctx::fiber f = ctx::fiber(std::allocator_arg, ctx::fixedsize_stack(64 * 1024),
+                                  [](ctx::fiber &&main)
+                                  {
+                                      while (true)
+                                      {
+                                          main = std::move(main).resume();
+                                      }
+                                      return std::move(main);
+                                  });
+
+        auto result_boost = benchmark::run("context switch (Boost.Context)", 1'000'000, [&f]()
+                                           { f = std::move(f).resume(); });
+        benchmark::print_result(result_boost);
+    }
+#else
+    std::println("Skipping Boost.Context benchmark (library not found)");
+#endif
 }
 
 void bench_storage_push_pop()
 {
-    auto coro_result = coro::coroutine::create([](coro::coroutine_handle h)
-                                               {
-        for (int i = 0; i < 100'000; ++i) {
-            auto value = h.pop<int>();
-            (void)value;
-            [[maybe_unused]] auto _ = h.yield();
-        } });
-
-    if (!coro_result)
+    // --- C++ Wrapper Setup (Safe) ---
     {
-        std::println(stderr, "failed to create coroutine for storage benchmark");
-        return;
+        auto coro_result = coro::coroutine::create([](coro::coroutine_handle h)
+                                                   {
+            while(true) {
+                auto value = h.pop<int>();
+                (void)value;
+                [[maybe_unused]] auto _ = h.yield();
+            } });
+
+        if (coro_result)
+        {
+            auto &coro = *coro_result;
+            auto result = benchmark::run("storage push + pop (C++ Safe)", 100'000, [&coro]()
+                                         {
+                [[maybe_unused]] auto _ = coro.push(42);
+                [[maybe_unused]] auto __ = coro.resume(); });
+            benchmark::print_result(result);
+        }
     }
 
-    auto &coro = *coro_result;
+    // --- C++ Wrapper Setup (Unchecked) ---
+    {
+        auto coro_result = coro::coroutine::create([](coro::coroutine_handle h)
+                                                   {
+            while(true) {
+                auto value = h.pop_unchecked<int>();
+                (void)value;
+                h.yield_unchecked();
+            } });
 
-    auto result = benchmark::run("storage push + pop (int)", 100'000, [&coro]()
-                                 {
-        [[maybe_unused]] auto _ = coro.push(42);
-        [[maybe_unused]] auto __ = coro.resume(); });
-    benchmark::print_result(result);
+        if (coro_result)
+        {
+            auto &coro = *coro_result;
+            auto result = benchmark::run("storage push + pop (C++ Unchecked)", 100'000, [&coro]()
+                                         {
+                coro.push_unchecked(42);
+                coro.resume_unchecked(); });
+            benchmark::print_result(result);
+        }
+    }
+
+    // --- Raw C API Setup ---
+    {
+        coro::detail::mco_desc desc = coro::detail::mco_desc_init(raw_storage_loop, 0);
+        coro::detail::mco_coro *raw_co = nullptr;
+        coro::detail::mco_create(&raw_co, &desc);
+
+        auto result_raw = benchmark::run("storage push + pop (Raw C API)", 100'000, [raw_co]()
+                                         {
+            int val = 42;
+            coro::detail::mco_push(raw_co, &val, sizeof(int));
+            coro::detail::mco_resume(raw_co); });
+        benchmark::print_result(result_raw);
+        coro::detail::mco_destroy(raw_co);
+    }
 }
 
 void bench_generator_iteration()
 {
     auto gen_result = coro::generator<int>::create([](coro::coroutine_handle h)
                                                    {
-        for (int i = 0; i < 100'000; ++i) {
-            [[maybe_unused]] auto _ = coro::yield_value(h, i);
+        int i = 0;
+        while(true) {
+            [[maybe_unused]] auto _ = coro::yield_value(h, i++);
         } });
 
     if (!gen_result)
@@ -174,7 +337,7 @@ void bench_generator_iteration()
 
     auto &gen = *gen_result;
 
-    auto result = benchmark::run("generator iteration", 100'000, [&gen]()
+    auto result = benchmark::run("generator iteration (C++ only)", 100'000, [&gen]()
                                  { [[maybe_unused]] auto value = gen.next(); });
     benchmark::print_result(result);
 }

@@ -26,8 +26,14 @@ namespace coro
     namespace detail
     {
         // ============================================================================
-        // Internal Types (Must be visible to the wrapper)
+        // Internal Types & Constants (Visible for inlining)
         // ============================================================================
+
+#define MCO_MAGIC_NUMBER 0x7E3CB1A9
+
+        // Thread local pointer to current coroutine
+        // Defined in implementation section, declared here
+        extern thread_local struct mco_coro *mco_current_co;
 
         enum class mco_state
         {
@@ -54,10 +60,6 @@ namespace coro
             stack_overflow
         };
 
-        // Forward declaration
-        struct mco_coro;
-
-        // Struct definitions moved out of IMPL so wrapper can see them
         struct mco_coro
         {
             void *context;
@@ -90,6 +92,43 @@ namespace coro
             std::size_t coro_size;
             std::size_t stack_size;
         };
+
+#if defined(__x86_64__) && !defined(_WIN32)
+        struct mco_ctxbuf
+        {
+            void *rip, *rsp, *rbp, *rbx, *r12, *r13, *r14, *r15;
+        };
+        struct mco_context
+        {
+            mco_ctxbuf ctx;
+            mco_ctxbuf back_ctx;
+        };
+
+        // Assembly function declarations
+        extern "C" int _mco_switch(mco_ctxbuf *from, mco_ctxbuf *to);
+#else
+#error "Only x86_64 Linux/macOS supported in this version."
+#endif
+
+        // Inline helper to prepare state before jumping IN to a coroutine
+        inline void mco_prepare_jumpin(mco_coro *co)
+        {
+            mco_coro *prev_co = mco_current_co;
+            co->prev_co = prev_co;
+            if (prev_co)
+                prev_co->state = mco_state::normal;
+            mco_current_co = co;
+        }
+
+        // Inline helper to prepare state before jumping OUT of a coroutine
+        inline void mco_prepare_jumpout(mco_coro *co)
+        {
+            mco_coro *prev_co = co->prev_co;
+            co->prev_co = nullptr;
+            if (prev_co)
+                prev_co->state = mco_state::running;
+            mco_current_co = prev_co;
+        }
 
         // Internal API Declarations
         void *mco_get_user_data(mco_coro *co);
@@ -238,6 +277,35 @@ namespace coro
             return {};
         }
 
+        // --- High Performance Unsafe API ---
+        // Bypasses all safety checks (nullptr, status, stack overflow, return value).
+        // Undefined behavior if coroutine is null or not running.
+        void yield_unchecked() const noexcept
+        {
+            // Inline logic from mco_yield, skipping checks
+            handle_->state = detail::mco_state::suspended;
+            detail::mco_prepare_jumpout(handle_);
+            detail::mco_context *context = static_cast<detail::mco_context *>(handle_->context);
+            detail::_mco_switch(&context->ctx, &context->back_ctx);
+        }
+
+        template <storable T>
+        void push_unchecked(T const &value) const noexcept
+        {
+            std::memcpy(&handle_->storage[handle_->bytes_stored], std::addressof(value), sizeof(T));
+            handle_->bytes_stored += sizeof(T);
+        }
+
+        template <storable T>
+        T pop_unchecked() const noexcept
+        {
+            T value;
+            handle_->bytes_stored -= sizeof(T);
+            std::memcpy(&value, &handle_->storage[handle_->bytes_stored], sizeof(T));
+            return value;
+        }
+        // -----------------------------------
+
         [[nodiscard]] auto status() const noexcept -> state
         {
             return static_cast<state>(detail::mco_status(handle_));
@@ -376,6 +444,24 @@ namespace coro
                 return std::unexpected{result};
             return {};
         }
+
+        // --- High Performance Unsafe API ---
+        // Bypasses validity and status checks.
+        // Undefined behavior if coroutine is invalid or not suspended.
+        void resume_unchecked() const noexcept
+        {
+            handle_->state = detail::mco_state::running;
+            detail::mco_prepare_jumpin(handle_);
+            detail::mco_context *context = static_cast<detail::mco_context *>(handle_->context);
+            detail::_mco_switch(&context->back_ctx, &context->ctx);
+        }
+
+        template <storable T>
+        void push_unchecked(T const &value) const noexcept { handle().push_unchecked(value); }
+
+        template <storable T>
+        T pop_unchecked() const noexcept { return handle().pop_unchecked<T>(); }
+        // -----------------------------------
 
         [[nodiscard]] auto status() const noexcept -> state { return static_cast<state>(detail::mco_status(handle_)); }
         [[nodiscard]] auto done() const noexcept -> bool { return status() == state::dead; }
@@ -606,14 +692,11 @@ struct std::formatter<coro::state> : std::formatter<std::string_view>
 
 namespace coro::detail
 {
-    // ------------------- minicoro implementation definitions -------------------
+    thread_local mco_coro *mco_current_co = nullptr;
 
-#define MCO_MAGIC_NUMBER 0x7E3CB1A9
 #define MCO_DEFAULT_STORAGE_SIZE 1024
 #define MCO_MIN_STACK_SIZE 32768
 #define MCO_DEFAULT_STACK_SIZE (56 * 1024)
-
-    static thread_local mco_coro *mco_current_co = nullptr;
 
     static inline std::size_t mco_align_forward(std::size_t addr, std::size_t align)
     {
@@ -633,21 +716,9 @@ namespace coro::detail
         free(ptr);
     }
 
-#if defined(__x86_64__) && !defined(_WIN32)
-    struct mco_ctxbuf
-    {
-        void *rip, *rsp, *rbp, *rbx, *r12, *r13, *r14, *r15;
-    };
-    struct mco_context
-    {
-        mco_ctxbuf ctx;
-        mco_ctxbuf back_ctx;
-    };
-
-    // Declaration only for ASM symbols to avoid redefinition
     extern "C" void _mco_wrap_main(void);
-    extern "C" int _mco_switch(mco_ctxbuf *from, mco_ctxbuf *to);
 
+#if defined(__x86_64__) && !defined(_WIN32)
     __asm__(
         ".text\n"
 #ifdef __MACH__
@@ -722,24 +793,6 @@ namespace coro::detail
 #else
 #error "Only x86_64 Linux/macOS supported in this stripped version."
 #endif
-
-    static inline void mco_prepare_jumpin(mco_coro *co)
-    {
-        mco_coro *prev_co = mco_current_co;
-        co->prev_co = prev_co;
-        if (prev_co)
-            prev_co->state = mco_state::normal;
-        mco_current_co = co;
-    }
-
-    static inline void mco_prepare_jumpout(mco_coro *co)
-    {
-        mco_coro *prev_co = co->prev_co;
-        co->prev_co = nullptr;
-        if (prev_co)
-            prev_co->state = mco_state::running;
-        mco_current_co = prev_co;
-    }
 
     static void mco_main(mco_coro *co)
     {
