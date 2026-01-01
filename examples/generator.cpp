@@ -5,14 +5,14 @@
 #include "ucoro/ucoro.hpp"
 
 #include <cmath>
-#include <iostream>
+#include <print>
 
 int main()
 {
-    std::cout << "=== generator example ===\n\n";
+    std::println("=== generator example ===\n");
 
     // fibonacci generator
-    std::cout << "fibonacci sequence:\n  ";
+    std::print("fibonacci sequence:\n  ");
     {
         auto fib_gen = coro::generator<int>::create([](coro::coroutine_handle h)
                                                     {
@@ -28,14 +28,14 @@ int main()
         {
             for (auto const &value : *fib_gen)
             {
-                std::cout << value << " ";
+                std::print("{} ", value);
             }
-            std::cout << "\n";
+            std::println();
         }
     }
 
     // prime number generator
-    std::cout << "\nprime numbers up to 50:\n  ";
+    std::print("\nprime numbers up to 50:\n  ");
     {
         auto is_prime = [](int n) -> bool
         {
@@ -65,14 +65,14 @@ int main()
         {
             for (auto const &prime : *prime_gen)
             {
-                std::cout << prime << " ";
+                std::print("{} ", prime);
             }
-            std::cout << "\n";
+            std::println();
         }
     }
 
     // squares generator with sum
-    std::cout << "\nsquares of 1-10:\n  ";
+    std::print("\nsquares of 1-10:\n  ");
     {
         auto squares = coro::generator<int>::create([](coro::coroutine_handle h)
                                                     {
@@ -85,13 +85,13 @@ int main()
             int sum = 0;
             for (auto const &sq : *squares)
             {
-                std::cout << sq << " ";
+                std::print("{} ", sq);
                 sum += sq;
             }
-            std::cout << "\n  sum = " << sum << "\n";
+            std::println("\n  sum = {}", sum);
         }
     }
 
-    std::cout << "\ndone!\n";
+    std::println("\ndone!");
     return 0;
 }

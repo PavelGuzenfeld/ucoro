@@ -8,10 +8,8 @@
 
 #include <algorithm>
 #include <chrono>
-#include <format>
-#include <iomanip>
-#include <iostream>
 #include <numeric>
+#include <print>
 #include <vector>
 
 // ============================================================================
@@ -85,25 +83,17 @@ public:
 
     static void print_result(result const &r)
     {
-        std::cout << "┌─────────────────────────────────────────────────────────────\n";
-        std::cout << "│ " << r.name << "\n";
-        std::cout << "├─────────────────────────────────────────────────────────────\n";
-        std::cout << "│ iterations:   " << std::setw(15) << r.iterations << "\n";
-        std::cout << std::fixed << std::setprecision(3);
-        std::cout << "│ total time:   " << std::setw(15)
-                  << std::chrono::duration<double, std::milli>(r.total_time).count() << " ms\n";
-        std::cout << std::setprecision(1);
-        std::cout << "│ mean time:    " << std::setw(15)
-                  << static_cast<double>(r.mean_time.count()) << " ns\n";
-        std::cout << "│ median time:  " << std::setw(15)
-                  << static_cast<double>(r.median_time.count()) << " ns\n";
-        std::cout << "│ min time:     " << std::setw(15)
-                  << static_cast<double>(r.min_time.count()) << " ns\n";
-        std::cout << "│ max time:     " << std::setw(15)
-                  << static_cast<double>(r.max_time.count()) << " ns\n";
-        std::cout << std::setprecision(0);
-        std::cout << "│ ops/sec:      " << std::setw(15) << r.ops_per_second << "\n";
-        std::cout << "└─────────────────────────────────────────────────────────────\n\n";
+        std::println("┌─────────────────────────────────────────────────────────────");
+        std::println("│ {}", r.name);
+        std::println("├─────────────────────────────────────────────────────────────");
+        std::println("│ iterations:   {:15}", r.iterations);
+        std::println("│ total time:   {:15.3f} ms", std::chrono::duration<double, std::milli>(r.total_time).count());
+        std::println("│ mean time:    {:15.1f} ns", static_cast<double>(r.mean_time.count()));
+        std::println("│ median time:  {:15.1f} ns", static_cast<double>(r.median_time.count()));
+        std::println("│ min time:     {:15.1f} ns", static_cast<double>(r.min_time.count()));
+        std::println("│ max time:     {:15.1f} ns", static_cast<double>(r.max_time.count()));
+        std::println("│ ops/sec:      {:15.0f}", r.ops_per_second);
+        std::println("└─────────────────────────────────────────────────────────────\n");
     }
 };
 
@@ -132,7 +122,7 @@ void bench_context_switch()
 
     if (!coro_result)
     {
-        std::cerr << "failed to create coroutine for context switch benchmark\n";
+        std::println(stderr, "failed to create coroutine for context switch benchmark");
         return;
     }
 
@@ -155,7 +145,7 @@ void bench_storage_push_pop()
 
     if (!coro_result)
     {
-        std::cerr << "failed to create coroutine for storage benchmark\n";
+        std::println(stderr, "failed to create coroutine for storage benchmark");
         return;
     }
 
@@ -178,7 +168,7 @@ void bench_generator_iteration()
 
     if (!gen_result)
     {
-        std::cerr << "failed to create generator for iteration benchmark\n";
+        std::println(stderr, "failed to create generator for iteration benchmark");
         return;
     }
 
@@ -191,25 +181,26 @@ void bench_generator_iteration()
 
 void bench_memory_overhead()
 {
-    std::cout << "┌─────────────────────────────────────────────────────────────\n";
-    std::cout << "│ memory overhead analysis\n";
-    std::cout << "├─────────────────────────────────────────────────────────────\n";
-    std::cout << "│ sizeof(coro::coroutine):   " << std::setw(6) << sizeof(coro::coroutine) << " bytes\n";
-    std::cout << "│ sizeof(coroutine_handle):  " << std::setw(6) << sizeof(coro::coroutine_handle) << " bytes\n";
-    std::cout << "│ sizeof(coro::error):       " << std::setw(6) << sizeof(coro::error) << " bytes\n";
-    std::cout << "│ sizeof(coro::state):       " << std::setw(6) << sizeof(coro::state) << " bytes\n";
-    std::cout << "│ sizeof(coro::stack_size):  " << std::setw(6) << sizeof(coro::stack_size) << " bytes\n";
-    std::cout << "│ sizeof(coro::task_runner): " << std::setw(6) << sizeof(coro::task_runner) << " bytes\n";
-    std::cout << "│ default stack size:        " << std::setw(6) << coro::default_stack_size.value << " bytes\n";
-    std::cout << "│ default storage size:      " << std::setw(6) << coro::default_storage_size.value << " bytes\n";
-    std::cout << "└─────────────────────────────────────────────────────────────\n\n";
+    std::println("┌─────────────────────────────────────────────────────────────");
+    std::println("│ memory overhead analysis");
+    std::println("├─────────────────────────────────────────────────────────────");
+    std::println("│ sizeof(mco_coro):          {:6} bytes", sizeof(coro::detail::mco_coro));
+    std::println("│ sizeof(coro::coroutine):   {:6} bytes", sizeof(coro::coroutine));
+    std::println("│ sizeof(coroutine_handle):  {:6} bytes", sizeof(coro::coroutine_handle));
+    std::println("│ sizeof(coro::error):       {:6} bytes", sizeof(coro::error));
+    std::println("│ sizeof(coro::state):       {:6} bytes", sizeof(coro::state));
+    std::println("│ sizeof(coro::stack_size):  {:6} bytes", sizeof(coro::stack_size));
+    std::println("│ sizeof(coro::task_runner): {:6} bytes", sizeof(coro::task_runner));
+    std::println("│ default stack size:        {:6} bytes", coro::default_stack_size.value);
+    std::println("│ default storage size:      {:6} bytes", coro::default_storage_size.value);
+    std::println("└─────────────────────────────────────────────────────────────\n");
 }
 
 void bench_allocation_pattern()
 {
-    std::cout << "┌─────────────────────────────────────────────────────────────\n";
-    std::cout << "│ allocation pattern analysis\n";
-    std::cout << "├─────────────────────────────────────────────────────────────\n";
+    std::println("┌─────────────────────────────────────────────────────────────");
+    std::println("│ allocation pattern analysis");
+    std::println("├─────────────────────────────────────────────────────────────");
 
     constexpr std::size_t count = 1000;
     std::vector<coro::coroutine> coroutines;
@@ -235,13 +226,11 @@ void bench_allocation_pattern()
     auto const create_time = std::chrono::duration<double, std::milli>(after_create - start).count();
     auto const destroy_time = std::chrono::duration<double, std::milli>(after_destroy - after_create).count();
 
-    std::cout << std::fixed << std::setprecision(2);
-    std::cout << "│ created " << count << " coroutines in " << create_time << " ms ("
-              << std::setprecision(1) << create_time * 1e6 / static_cast<double>(count) << " ns each)\n";
-    std::cout << std::setprecision(2);
-    std::cout << "│ destroyed " << count << " coroutines in " << destroy_time << " ms ("
-              << std::setprecision(1) << destroy_time * 1e6 / static_cast<double>(count) << " ns each)\n";
-    std::cout << "└─────────────────────────────────────────────────────────────\n\n";
+    std::println("│ created {} coroutines in {:.2f} ms ({:.1f} ns each)",
+                 count, create_time, create_time * 1e6 / static_cast<double>(count));
+    std::println("│ destroyed {} coroutines in {:.2f} ms ({:.1f} ns each)",
+                 count, destroy_time, destroy_time * 1e6 / static_cast<double>(count));
+    std::println("└─────────────────────────────────────────────────────────────\n");
 }
 
 // ============================================================================
@@ -250,9 +239,9 @@ void bench_allocation_pattern()
 
 int main()
 {
-    std::cout << "═══════════════════════════════════════════════════════════════\n";
-    std::cout << "              ucoro C++23 wrapper benchmarks                \n";
-    std::cout << "═══════════════════════════════════════════════════════════════\n\n";
+    std::println("═══════════════════════════════════════════════════════════════");
+    std::println("              ucoro C++23 wrapper benchmarks                ");
+    std::println("═══════════════════════════════════════════════════════════════\n");
 
     bench_memory_overhead();
     bench_allocation_pattern();
@@ -261,9 +250,9 @@ int main()
     bench_storage_push_pop();
     bench_generator_iteration();
 
-    std::cout << "═══════════════════════════════════════════════════════════════\n";
-    std::cout << "                     benchmarks complete                       \n";
-    std::cout << "═══════════════════════════════════════════════════════════════\n";
+    std::println("═══════════════════════════════════════════════════════════════");
+    std::println("                     benchmarks complete                       ");
+    std::println("═══════════════════════════════════════════════════════════════");
 
     return 0;
 }
