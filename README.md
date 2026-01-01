@@ -35,7 +35,7 @@ A modern C++23 coroutine library providing **stackful coroutines** with blazing-
 ```cmake
 include(FetchContent)
 FetchContent_Declare(ucoro
-    GIT_REPOSITORY https://github.com/pavelguzenfeld/ucoro.git
+    GIT_REPOSITORY https://github.com/YOUR_USERNAME/ucoro.git
     GIT_TAG main
 )
 FetchContent_MakeAvailable(ucoro)
@@ -156,6 +156,203 @@ auto coro = coro::coroutine::create([](coro::coroutine_handle h) {
 coro->push_unchecked(21);
 coro->resume_unchecked();
 int result = coro->pop_unchecked<int>(); // 42
+```
+
+## Advanced Examples
+
+These examples demonstrate why you'd choose stackful coroutines over C++20's stackless `co_await`/`co_yield`.
+
+### Deep Yield (Yield From Any Call Depth)
+
+C++20 coroutines can only `co_yield` from the coroutine function itself. With stackful coroutines, you can yield from **any call depth** - no need to make every function in the chain async:
+
+```cpp
+// This is IMPOSSIBLE with C++20 coroutines without making
+// every function in the chain a coroutine (viral async/await)
+
+void parse_nested_json(coro::coroutine_handle h, json_node const& node, int depth) {
+    if (depth > max_depth) {
+        h.yield_unchecked();  // Pause parsing, let other work run!
+        return;
+    }
+    
+    for (auto const& child : node.children()) {
+        validate_node(child);
+        parse_nested_json(h, child, depth + 1);  // Recursive - can still yield!
+    }
+}
+
+void process_large_file(coro::coroutine_handle h, std::istream& file) {
+    json_parser parser;
+    while (auto node = parser.next_root(file)) {
+        parse_nested_json(h, *node, 0);  // Yields happen deep inside
+        h.yield_unchecked();  // Yield between root nodes too
+    }
+}
+
+// Create worker that processes without blocking
+auto json_worker = coro::coroutine::create([&](coro::coroutine_handle h) {
+    process_large_file(h, massive_json_stream);
+});
+
+// Main loop stays responsive - worker yields periodically from deep in the call stack
+while (!json_worker.done()) {
+    json_worker.resume_unchecked();
+    handle_ui_events();  // UI never freezes
+}
+```
+
+### Game AI Behavior (State Machines Made Readable)
+
+Game AI typically requires complex state machines. With stackful coroutines, behavior reads like a script:
+
+```cpp
+// NPC behavior that reads like pseudocode, not a state machine nightmare
+auto npc_brain = coro::coroutine::create([&](coro::coroutine_handle h) {
+    while (npc.alive()) {
+        
+        // === PATROL STATE ===
+        for (auto const& waypoint : patrol_route) {
+            // Walk to waypoint, yielding each frame
+            while (!npc.at(waypoint)) {
+                npc.move_toward(waypoint);
+                h.yield_unchecked();  // Wait for next game tick
+                
+                // Interrupt patrol if player spotted
+                if (npc.can_see(player)) {
+                    goto chase;  // Natural flow control!
+                }
+            }
+            
+            // Idle at waypoint for a bit
+            for (int i = 0; i < 120; ++i) {  // ~2 seconds at 60fps
+                npc.play_idle_animation();
+                h.yield_unchecked();
+                
+                if (npc.can_see(player)) {
+                    goto chase;
+                }
+            }
+        }
+        continue;  // Loop patrol forever
+        
+    chase:
+        // === CHASE STATE ===
+        npc.yell("Stop right there!");
+        npc.set_alert_status(true);
+        
+        while (npc.can_see(player) && npc.distance_to(player) > melee_range) {
+            npc.sprint_toward(player.position());
+            h.yield_unchecked();
+        }
+        
+        if (!npc.can_see(player)) {
+            // Lost sight - search for a few seconds
+            auto last_seen = player.position();
+            for (int i = 0; i < 180; ++i) {  // ~3 seconds
+                npc.investigate(last_seen);
+                h.yield_unchecked();
+                
+                if (npc.can_see(player)) {
+                    goto chase;  // Found them!
+                }
+            }
+            npc.set_alert_status(false);
+            continue;  // Give up, back to patrol
+        }
+        
+        // === ATTACK STATE ===
+        while (npc.distance_to(player) <= melee_range) {
+            npc.attack(player);
+            
+            // Wait for attack animation to complete
+            for (int frame = 0; frame < npc.attack_animation_frames(); ++frame) {
+                h.yield_unchecked();
+            }
+            
+            // Cooldown between attacks
+            for (int i = 0; i < 30; ++i) {
+                h.yield_unchecked();
+                if (npc.distance_to(player) > melee_range) {
+                    goto chase;  // Player retreated
+                }
+            }
+        }
+    }
+    
+    // NPC died - play death animation
+    for (int i = 0; i < npc.death_animation_frames(); ++i) {
+        h.yield_unchecked();
+    }
+});
+
+// Game loop - just resume all NPC brains each tick
+void game_update() {
+    for (auto& npc : world.npcs) {
+        if (!npc.brain->done()) {
+            npc.brain->resume_unchecked();
+        }
+    }
+}
+```
+
+Compare this to the equivalent state machine with enums and switch statements - the coroutine version is dramatically more readable and maintainable.
+
+### Wrapping Callback-Based APIs
+
+Turn callback spaghetti into linear async code:
+
+```cpp
+// Typical callback-based async API (like libuv, asio, Win32, etc.)
+using read_callback = std::function<void(std::span<std::byte const>, std::error_code)>;
+void async_read(socket_t sock, std::span<std::byte> buffer, read_callback cb);
+
+// Coroutine wrapper that makes callbacks look synchronous
+class async_socket {
+    coro::coroutine* coro_;
+    std::span<std::byte const> last_read_;
+    std::error_code last_error_;
+
+public:
+    explicit async_socket(coro::coroutine_handle h) : coro_(&h.get()) {}
+    
+    // Suspends coroutine until read completes
+    auto read(socket_t sock, std::span<std::byte> buffer) 
+        -> std::expected<std::span<std::byte const>, std::error_code> 
+    {
+        async_read(sock, buffer, [this](auto data, auto ec) {
+            last_read_ = data;
+            last_error_ = ec;
+            coro_->resume_unchecked();  // Callback resumes us
+        });
+        
+        coro::running()->yield_unchecked();  // Suspend until callback fires
+        
+        if (last_error_) {
+            return std::unexpected(last_error_);
+        }
+        return last_read_;
+    }
+};
+
+// Usage: callback hell becomes beautiful linear code
+auto http_handler = coro::coroutine::create([&](coro::coroutine_handle h) {
+    async_socket sock{h};
+    std::array<std::byte, 4096> buffer;
+    
+    // This LOOKS synchronous but is fully async!
+    auto header_data = sock.read(client_socket, buffer);
+    if (!header_data) {
+        log_error(header_data.error());
+        return;
+    }
+    
+    auto request = parse_http_header(*header_data);
+    auto body = sock.read(client_socket, buffer);
+    
+    auto response = generate_response(request, body.value_or({}));
+    sock.write(client_socket, response);
+});
 ```
 
 ## API Reference
