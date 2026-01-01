@@ -21,18 +21,60 @@
 #include <utility>
 #include <vector>
 
+// ============================================================================
+// Configuration (Externalizable via Build Parameters)
+// ============================================================================
+
+// Override these defaults using compiler flags (e.g., -DUCORO_STACK_SIZE=65536)
+
+#ifndef UCORO_STACK_SIZE
+#define UCORO_STACK_SIZE (56 * 1024)
+#endif
+
+#ifndef UCORO_MIN_STACK_SIZE
+#define UCORO_MIN_STACK_SIZE 32768
+#endif
+
+#ifndef UCORO_STORAGE_SIZE
+#define UCORO_STORAGE_SIZE 1024
+#endif
+
 namespace coro
 {
+    // ============================================================================
+    // Constants & Strong Types
+    // ============================================================================
+
+    namespace detail
+    {
+        // Magic number for stack corruption detection
+        static constexpr std::size_t magic_number = 0x7E3CB1A9;
+    }
+
+    struct stack_size
+    {
+        std::size_t value;
+        [[nodiscard]] constexpr explicit stack_size(std::size_t v) noexcept : value{v} {}
+    };
+
+    struct storage_size
+    {
+        std::size_t value;
+        [[nodiscard]] constexpr explicit storage_size(std::size_t v) noexcept : value{v} {}
+    };
+
+    // Public constants derived from build parameters
+    inline constexpr stack_size default_stack_size{UCORO_STACK_SIZE};
+    inline constexpr storage_size default_storage_size{UCORO_STORAGE_SIZE};
+    inline constexpr stack_size min_stack_size{UCORO_MIN_STACK_SIZE};
+
     namespace detail
     {
         // ============================================================================
-        // Internal Types & Constants (Visible for inlining)
+        // Internal Types & Forward Declarations
         // ============================================================================
 
-#define MCO_MAGIC_NUMBER 0x7E3CB1A9
-
         // Thread local pointer to current coroutine
-        // Defined in implementation section, declared here
         extern thread_local struct mco_coro *mco_current_co;
 
         enum class mco_state
@@ -104,7 +146,6 @@ namespace coro
             mco_ctxbuf back_ctx;
         };
 
-        // Assembly function declarations
         extern "C" int _mco_switch(mco_ctxbuf *from, mco_ctxbuf *to);
 #else
 #error "Only x86_64 Linux/macOS supported in this version."
@@ -232,7 +273,7 @@ namespace coro
     }
 
     // ============================================================================
-    // Concepts & Configuration
+    // Concepts
     // ============================================================================
 
     template <typename F>
@@ -240,22 +281,6 @@ namespace coro
 
     template <typename T>
     concept storable = std::is_trivially_copyable_v<T> && std::is_standard_layout_v<T> && (sizeof(T) <= 1024);
-
-    struct stack_size
-    {
-        std::size_t value;
-        [[nodiscard]] constexpr explicit stack_size(std::size_t v) noexcept : value{v} {}
-    };
-
-    struct storage_size
-    {
-        std::size_t value;
-        [[nodiscard]] constexpr explicit storage_size(std::size_t v) noexcept : value{v} {}
-    };
-
-    inline constexpr stack_size default_stack_size{56UL * 1024UL};
-    inline constexpr storage_size default_storage_size{1024UL};
-    inline constexpr stack_size min_stack_size{32768UL};
 
     // ============================================================================
     // Classes
@@ -278,11 +303,8 @@ namespace coro
         }
 
         // --- High Performance Unsafe API ---
-        // Bypasses all safety checks (nullptr, status, stack overflow, return value).
-        // Undefined behavior if coroutine is null or not running.
         void yield_unchecked() const noexcept
         {
-            // Inline logic from mco_yield, skipping checks
             handle_->state = detail::mco_state::suspended;
             detail::mco_prepare_jumpout(handle_);
             detail::mco_context *context = static_cast<detail::mco_context *>(handle_->context);
@@ -446,8 +468,6 @@ namespace coro
         }
 
         // --- High Performance Unsafe API ---
-        // Bypasses validity and status checks.
-        // Undefined behavior if coroutine is invalid or not suspended.
         void resume_unchecked() const noexcept
         {
             handle_->state = detail::mco_state::running;
@@ -694,10 +714,6 @@ namespace coro::detail
 {
     thread_local mco_coro *mco_current_co = nullptr;
 
-#define MCO_DEFAULT_STORAGE_SIZE 1024
-#define MCO_MIN_STACK_SIZE 32768
-#define MCO_DEFAULT_STACK_SIZE (56 * 1024)
-
     static inline std::size_t mco_align_forward(std::size_t addr, std::size_t align)
     {
         return (addr + (align - 1)) & ~(align - 1);
@@ -859,12 +875,12 @@ namespace coro::detail
     {
         if (stack_size != 0)
         {
-            if (stack_size < MCO_MIN_STACK_SIZE)
-                stack_size = MCO_MIN_STACK_SIZE;
+            if (stack_size < min_stack_size.value)
+                stack_size = min_stack_size.value;
         }
         else
         {
-            stack_size = MCO_DEFAULT_STACK_SIZE;
+            stack_size = default_stack_size.value;
         }
         stack_size = mco_align_forward(stack_size, 16);
 
@@ -873,7 +889,7 @@ namespace coro::detail
         desc.alloc_cb = mco_alloc;
         desc.dealloc_cb = mco_dealloc;
         desc.func = func;
-        desc.storage_size = MCO_DEFAULT_STORAGE_SIZE;
+        desc.storage_size = default_storage_size.value;
         mco_init_desc_sizes(&desc, stack_size);
         return desc;
     }
@@ -884,7 +900,7 @@ namespace coro::detail
             return mco_result::invalid_coroutine;
         if (!desc || !desc->func)
             return mco_result::invalid_arguments;
-        if (desc->stack_size < MCO_MIN_STACK_SIZE)
+        if (desc->stack_size < min_stack_size.value)
             return mco_result::invalid_arguments;
 
         std::memset(co, 0, sizeof(mco_coro));
@@ -898,7 +914,7 @@ namespace coro::detail
         co->allocator_data = desc->allocator_data;
         co->func = desc->func;
         co->user_data = desc->user_data;
-        co->magic_number = MCO_MAGIC_NUMBER;
+        co->magic_number = magic_number;
         return mco_result::success;
     }
 
@@ -972,7 +988,7 @@ namespace coro::detail
         std::uintptr_t stack_addr = reinterpret_cast<std::uintptr_t>(&dummy);
         std::uintptr_t stack_min = reinterpret_cast<std::uintptr_t>(co->stack_base);
         std::uintptr_t stack_max = stack_min + co->stack_size;
-        if (co->magic_number != MCO_MAGIC_NUMBER || stack_addr < stack_min || stack_addr > stack_max)
+        if (co->magic_number != magic_number || stack_addr < stack_min || stack_addr > stack_max)
             return mco_result::stack_overflow;
 
         if (co->state != mco_state::running)
