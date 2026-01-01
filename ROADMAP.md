@@ -2,6 +2,34 @@
 
 Current version: **0.0.1** (initial release)
 
+## Version 0.0.1 — Initial Release ✓
+
+### Core Features (Complete)
+- [x] ~55ns context switches (up to 50x faster than POSIX `ucontext`, faster than Boost.Context)
+- [x] Modern C++23 API (`std::expected`, concepts, strong types, `[[nodiscard]]`)
+- [x] Header-only distribution (single header, define `UCORO_IMPL` in one TU)
+- [x] Zero-overhead abstractions (safe API adds minimal overhead vs raw C)
+- [x] Cross-platform support (Windows x64, Linux x64/ARM64, macOS x64/ARM64)
+
+### API (Complete)
+- [x] `coro::coroutine` — stackful coroutine with RAII semantics
+- [x] `coro::coroutine_handle` — lightweight non-owning handle for use inside coroutines
+- [x] `coro::generator<T>` — Python-style generators with range-for support
+- [x] `coro::task_runner` — cooperative round-robin scheduler
+- [x] Type-safe storage — LIFO data passing between coroutine and caller (`push`/`pop`)
+- [x] `storable` concept — compile-time validation for storage types
+- [x] Strong types — `stack_size`, `storage_size` prevent parameter confusion
+- [x] Safe API — all operations return `std::expected<T, coro::error>`
+- [x] Unchecked API — `*_unchecked()` variants for hot paths
+
+### Testing & CI (Complete)
+- [x] Comprehensive test suite (45+ tests)
+- [x] Benchmarks comparing against raw C API and POSIX `ucontext`
+- [x] CI on Windows (MSVC), Linux (GCC, Clang), macOS (Apple Clang)
+- [x] ASan + UBSan in debug builds
+
+---
+
 ## Version 0.1.0 — Stabilization
 
 ### Code Quality

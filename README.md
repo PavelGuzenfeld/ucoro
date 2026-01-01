@@ -9,12 +9,12 @@ A modern C++23 coroutine library providing **stackful coroutines** with blazing-
 [![Sanitizers](https://github.com/YOUR_USERNAME/ucoro/actions/workflows/sanitizers.yml/badge.svg)](https://github.com/YOUR_USERNAME/ucoro/actions/workflows/sanitizers.yml)
 -->
 
-| Compiler | Minimum Version |
-|----------|-----------------|
-| GCC | 13+ |
-| Clang | 18+ |
-| MSVC | 2022 (19.38+) |
-| Apple Clang | 15+ |
+| Compiler    | Minimum Version |
+| ----------- | --------------- |
+| GCC         | 13+             |
+| Clang       | 18+             |
+| MSVC        | 2022 (19.38+)   |
+| Apple Clang | 15+             |
 
 ## Features
 
@@ -26,6 +26,8 @@ A modern C++23 coroutine library providing **stackful coroutines** with blazing-
 - **Generators** - Python-style generators with range-for support
 - **Task runner** - cooperative round-robin scheduler
 - **Type-safe storage** - LIFO data passing between coroutine and caller
+
+📋 **[See the Roadmap](ROADMAP.md)** for planned features and release schedule.
 
 ## Quick Start
 
@@ -422,23 +424,23 @@ Context switch performance compared to POSIX `ucontext` and Boost.Context.
 
 ### Context Switch Latency (median, lower is better)
 
-| Platform | ucoro Safe | ucoro Unchecked | Boost.Context | ucontext | Speedup vs ucontext |
-|----------|------------|-----------------|---------------|----------|---------------------|
-| **Linux x64** (Local, GCC 13) | 91 ns | **55 ns** | 72 ns | 352 ns | **6.4x** |
-| **Windows x64** (CI, MSVC) | 100 ns | 100 ns | N/A | N/A | - |
-| **macOS ARM64** (CI, Apple Clang) | 42 ns | 42 ns | N/A | 1,625 ns | **~39x** |
-| **Ubuntu x64** (CI, Clang 18) | 40 ns | 40 ns | N/A | 652 ns | **~16x** |
-| **Ubuntu x64** (CI, GCC 13) | 50 ns | 40 ns | N/A | 661 ns | **~17x** |
+| Platform                          | ucoro Safe | ucoro Unchecked | Boost.Context | ucontext | Speedup vs ucontext |
+| --------------------------------- | ---------- | --------------- | ------------- | -------- | ------------------- |
+| **Linux x64** (Local, GCC 13)     | 91 ns      | **55 ns**       | 72 ns         | 352 ns   | **6.4x**            |
+| **Windows x64** (CI, MSVC)        | 100 ns     | 100 ns          | N/A           | N/A      | -                   |
+| **macOS ARM64** (CI, Apple Clang) | 42 ns      | 42 ns           | N/A           | 1,625 ns | **~39x**            |
+| **Ubuntu x64** (CI, Clang 18)     | 40 ns      | 40 ns           | N/A           | 652 ns   | **~16x**            |
+| **Ubuntu x64** (CI, GCC 13)       | 50 ns      | 40 ns           | N/A           | 661 ns   | **~17x**            |
 
 ### Context Switch Throughput (ops/sec, higher is better)
 
-| Platform | ucoro Safe | ucoro Unchecked | Boost.Context | ucontext |
-|----------|------------|-----------------|---------------|----------|
-| **Linux x64** (Local) | 10.5M | **17.5M** | 13.1M | 2.7M |
-| **Windows x64** (CI) | 18.1M | 18.2M | N/A | N/A |
-| **macOS ARM64** (CI) | 30.3M | 30.8M | N/A | 611K |
-| **Ubuntu x64** (CI, Clang 18) | 23.2M | 22.1M | N/A | 1.51M |
-| **Ubuntu x64** (CI, GCC 13) | 20.8M | 23.4M | N/A | 1.47M |
+| Platform                      | ucoro Safe | ucoro Unchecked | Boost.Context | ucontext |
+| ----------------------------- | ---------- | --------------- | ------------- | -------- |
+| **Linux x64** (Local)         | 10.5M      | **17.5M**       | 13.1M         | 2.7M     |
+| **Windows x64** (CI)          | 18.1M      | 18.2M           | N/A           | N/A      |
+| **macOS ARM64** (CI)          | 30.3M      | 30.8M           | N/A           | 611K     |
+| **Ubuntu x64** (CI, Clang 18) | 23.2M      | 22.1M           | N/A           | 1.51M    |
+| **Ubuntu x64** (CI, GCC 13)   | 20.8M      | 23.4M           | N/A           | 1.47M    |
 
 ### Performance Comparison Chart
 
@@ -458,30 +460,30 @@ ucontext POSIX  │████████████████████�
 
 ### Create + Destroy Throughput (ops/sec)
 
-| Platform | ucoro C++ | ucoro Raw C |
-|----------|-----------|-------------|
-| **Linux x64** (Local) | 1.06M | 1.15M |
-| **Windows x64** (CI) | 797K | 898K |
-| **macOS ARM64** (CI) | 1.40M | 1.39M |
-| **Ubuntu x64** (CI, Clang 18) | 1.37M | 1.42M |
-| **Ubuntu x64** (CI, GCC 13) | 1.06M | 1.32M |
+| Platform                      | ucoro C++ | ucoro Raw C |
+| ----------------------------- | --------- | ----------- |
+| **Linux x64** (Local)         | 1.06M     | 1.15M       |
+| **Windows x64** (CI)          | 797K      | 898K        |
+| **macOS ARM64** (CI)          | 1.40M     | 1.39M       |
+| **Ubuntu x64** (CI, Clang 18) | 1.37M     | 1.42M       |
+| **Ubuntu x64** (CI, GCC 13)   | 1.06M     | 1.32M       |
 
 ### Storage Operations (push + pop + context switch)
 
-| Platform | ucoro Safe | ucoro Unchecked | Raw C API |
-|----------|------------|-----------------|-----------|
+| Platform              | ucoro Safe | ucoro Unchecked | Raw C API   |
+| --------------------- | ---------- | --------------- | ----------- |
 | **Linux x64** (Local) | 8.3M ops/s | **14.9M ops/s** | 13.0M ops/s |
 
 ### Memory Overhead
 
-| Type | Size |
-|------|------|
-| `coro::coroutine` | 16 bytes |
-| `coro::coroutine_handle` | 8 bytes |
-| `coro::task_runner` | 24 bytes |
-| Internal `mco_coro` | 136 bytes |
-| Default stack | 56 KB |
-| Default storage | 1 KB |
+| Type                     | Size      |
+| ------------------------ | --------- |
+| `coro::coroutine`        | 16 bytes  |
+| `coro::coroutine_handle` | 8 bytes   |
+| `coro::task_runner`      | 24 bytes  |
+| Internal `mco_coro`      | 136 bytes |
+| Default stack            | 56 KB     |
+| Default storage          | 1 KB      |
 
 ## Building
 
@@ -510,23 +512,23 @@ ctest --test-dir build -C Release --output-on-failure
 
 ### CMake Options
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| `UCORO_BUILD_TESTS` | `ON` | Build test suite |
-| `UCORO_BUILD_BENCHMARKS` | `ON` | Build benchmarks |
-| `UCORO_BUILD_EXAMPLES` | `ON` | Build examples |
-| `UCORO_ENABLE_SANITIZERS` | `ON` | Enable ASan/UBSan in Debug |
+| Option                    | Default | Description                |
+| ------------------------- | ------- | -------------------------- |
+| `UCORO_BUILD_TESTS`       | `ON`    | Build test suite           |
+| `UCORO_BUILD_BENCHMARKS`  | `ON`    | Build benchmarks           |
+| `UCORO_BUILD_EXAMPLES`    | `ON`    | Build examples             |
+| `UCORO_ENABLE_SANITIZERS` | `ON`    | Enable ASan/UBSan in Debug |
 
 ## Platform Support
 
-| Platform | Architecture | Compiler | Status |
-|----------|--------------|----------|--------|
-| Linux | x86_64 | GCC 13+, Clang 18+ | ✅ Tested in CI |
-| Linux | ARM64 | GCC 13+, Clang 18+ | ✅ Supported |
-| macOS | x86_64 | Apple Clang 15+ | ✅ Supported |
-| macOS | ARM64 (Apple Silicon) | Apple Clang 15+ | ✅ Tested in CI |
-| Windows | x64 | MSVC 2022+ | ✅ Tested in CI |
-| Windows | ARM64 | MSVC | ❌ Not yet |
+| Platform | Architecture          | Compiler           | Status         |
+| -------- | --------------------- | ------------------ | -------------- |
+| Linux    | x86_64                | GCC 13+, Clang 18+ | ✅ Tested in CI |
+| Linux    | ARM64                 | GCC 13+, Clang 18+ | ✅ Supported    |
+| macOS    | x86_64                | Apple Clang 15+    | ✅ Supported    |
+| macOS    | ARM64 (Apple Silicon) | Apple Clang 15+    | ✅ Tested in CI |
+| Windows  | x64                   | MSVC 2022+         | ✅ Tested in CI |
+| Windows  | ARM64                 | MSVC               | ❌ Not yet      |
 
 ## How It Works
 
