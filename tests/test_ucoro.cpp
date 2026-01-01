@@ -442,7 +442,7 @@ TEST_SUITE("storage")
     TEST_CASE("push_unchecked and pop_unchecked work")
     {
         int value_out = 0;
-        auto result = coro::coroutine::create([&value_out](coro::coroutine_handle h)
+        auto result = coro::coroutine::create([](coro::coroutine_handle h)
                                               {
             int val = h.pop_unchecked<int>();
             val *= 2;
@@ -791,9 +791,9 @@ TEST_SUITE("edge cases")
     TEST_CASE("deeply nested yields")
     {
         int depth = 0;
-        int const max_depth = 1000;
+        static constexpr int max_depth = 1000;
 
-        auto result = coro::coroutine::create([&depth, max_depth](coro::coroutine_handle h)
+        auto result = coro::coroutine::create([&depth](coro::coroutine_handle h)
                                               {
             for (int i = 0; i < max_depth; ++i) {
                 ++depth;
