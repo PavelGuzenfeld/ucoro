@@ -2,7 +2,6 @@
 // the "hello world" of coroutines, if hello world involved context switching
 
 #define UCORO_IMPL
-#include "ucoro/impl/minicoro_impl.h"
 #include "ucoro/ucoro.hpp"
 
 #include <iostream>

@@ -8,7 +8,6 @@
 
 // define implementation before including the wrapper
 #define UCORO_IMPL
-#include "ucoro/impl/minicoro_impl.h"
 #include "ucoro/ucoro.hpp"
 
 #include <numeric>
