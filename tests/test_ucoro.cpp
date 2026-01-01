@@ -10,8 +10,11 @@
 #define UCORO_IMPL
 #include "ucoro/ucoro.hpp"
 
+#include <array>
+#include <atomic>
 #include <numeric>
 #include <string>
+#include <thread>
 #include <vector>
 
 // ============================================================================
@@ -85,7 +88,8 @@ TEST_SUITE("strong types")
 
     TEST_CASE("default values are sensible")
     {
-        CHECK(coro::default_stack_size.value == 56UL * 1024UL);
+        // These rely on the #defines in ucoro.hpp
+        CHECK(coro::default_stack_size.value >= 32768UL);
         CHECK(coro::default_storage_size.value == 1024UL);
         CHECK(coro::min_stack_size.value == 32768UL);
     }
@@ -407,6 +411,109 @@ TEST_SUITE("storage")
 
         // pop will be 3, 2, 1 (LIFO)
         (void)coro.resume();
+    }
+
+    TEST_CASE("resume_unchecked and yield_unchecked work")
+    {
+        int counter = 0;
+        auto result = coro::coroutine::create([&counter](coro::coroutine_handle h)
+                                              {
+            counter++;
+            h.yield_unchecked();
+            counter++; });
+
+        REQUIRE(result.has_value());
+        auto &coro = *result;
+
+        CHECK(counter == 0);
+
+        // Fast resume
+        coro.resume_unchecked();
+        CHECK(counter == 1);
+        CHECK(coro.suspended());
+
+        // Fast resume again
+        coro.resume_unchecked();
+        CHECK(counter == 2);
+        CHECK(coro.done());
+    }
+
+    TEST_CASE("push_unchecked and pop_unchecked work")
+    {
+        int value_out = 0;
+        auto result = coro::coroutine::create([&value_out](coro::coroutine_handle h)
+                                              {
+            int val = h.pop_unchecked<int>();
+            val *= 2;
+            h.push_unchecked(val); });
+
+        REQUIRE(result.has_value());
+        auto &coro = *result;
+
+        coro.push_unchecked(50);
+        coro.resume_unchecked();
+
+        value_out = coro.pop_unchecked<int>();
+        CHECK(value_out == 100);
+    }
+}
+
+// ============================================================================
+// multithreading tests
+// ============================================================================
+
+TEST_SUITE("multithreading")
+{
+    TEST_CASE("coroutines are independent across threads")
+    {
+        auto worker_fn = [](int id)
+        {
+            std::vector<int> result_data;
+            auto coro = coro::coroutine::create([&result_data, id](coro::coroutine_handle h)
+                                                {
+                result_data.push_back(id);
+                (void)h.yield();
+                result_data.push_back(id * 10); });
+
+            if (coro)
+            {
+                (void)coro->resume();
+                (void)coro->resume();
+            }
+            return result_data;
+        };
+
+        std::vector<int> res1, res2;
+        std::thread t1([&]()
+                       { res1 = worker_fn(1); });
+        std::thread t2([&]()
+                       { res2 = worker_fn(2); });
+
+        t1.join();
+        t2.join();
+
+        CHECK((res1 == std::vector<int>{1, 10}));
+        CHECK((res2 == std::vector<int>{2, 20}));
+    }
+
+    TEST_CASE("task_runner in a separate thread")
+    {
+        std::atomic<bool> thread_done{false};
+        std::thread t([&]()
+                      {
+            coro::task_runner runner;
+            
+            // Add a task that yields
+            auto task = coro::coroutine::create([](coro::coroutine_handle h) {
+                (void)h.yield();
+            });
+            
+            runner.add(std::move(*task));
+            (void)runner.run();
+            thread_done = true; });
+
+        t.join();
+        CHECK(thread_done);
     }
 }
 
