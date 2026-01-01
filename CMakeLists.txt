@@ -67,10 +67,10 @@ if(UCORO_BUILD_TESTS)
     FetchContent_MakeAvailable(doctest)
 endif()
 
-# Check for Boost
+# 3. Boost (Optional, for benchmarks)
 find_package(Boost COMPONENTS context QUIET)
 
-# Library Target
+# --- Library Target ---
 add_library(ucoro INTERFACE)
 add_library(ucoro::ucoro ALIAS ucoro)
 
@@ -84,7 +84,7 @@ target_compile_features(ucoro INTERFACE cxx_std_23)
 # Link fmt to the library interface so users get it automatically
 target_link_libraries(ucoro INTERFACE fmt::fmt)
 
-# Tests
+# --- Tests ---
 if(UCORO_BUILD_TESTS)
     enable_testing()
     add_executable(test_ucoro tests/test_ucoro.cpp)
@@ -93,11 +93,17 @@ if(UCORO_BUILD_TESTS)
     add_test(NAME ucoro_tests COMMAND test_ucoro)
 endif()
 
-# Benchmarks
+# --- Benchmarks ---
 if(UCORO_BUILD_BENCHMARKS)
     add_executable(benchmark_ucoro benchmarks/benchmark_ucoro.cpp)
     target_link_libraries(benchmark_ucoro PRIVATE ucoro)
-    target_compile_options(benchmark_ucoro PRIVATE $<$<CONFIG:Release>:-O3> $<$<CONFIG:Debug>:-O2>)
+    
+    # Fix for MSVC optimization flags
+    if(MSVC)
+        target_compile_options(benchmark_ucoro PRIVATE $<$<CONFIG:Release>:/O2> $<$<CONFIG:Debug>:/Od>)
+    else()
+        target_compile_options(benchmark_ucoro PRIVATE $<$<CONFIG:Release>:-O3> $<$<CONFIG:Debug>:-O2>)
+    endif()
     
     if(UNIX)
         target_compile_definitions(benchmark_ucoro PRIVATE HAVE_UCONTEXT)
@@ -112,7 +118,7 @@ if(UCORO_BUILD_BENCHMARKS)
     endif()
 endif()
 
-# Examples
+# --- Examples ---
 if(UCORO_BUILD_EXAMPLES)
     add_executable(example_basic examples/basic.cpp)
     target_link_libraries(example_basic PRIVATE ucoro)
@@ -121,7 +127,7 @@ if(UCORO_BUILD_EXAMPLES)
     target_link_libraries(example_generator PRIVATE ucoro)
 endif()
 
-# Install
+# --- Install ---
 include(GNUInstallDirs)
 
 install(TARGETS ucoro
