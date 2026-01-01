@@ -5,6 +5,11 @@ project(ucoro
     LANGUAGES CXX
 )
 
+# --- Fix for CMake 3.30+ ---
+# Dependencies like doctest use older cmake_minimum_required (e.g. 3.0).
+# CMake 3.30+ errors on versions < 3.5. This variable forces the minimum to 3.5.
+set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
+
 option(UCORO_BUILD_TESTS "Build tests" ON)
 option(UCORO_BUILD_BENCHMARKS "Build benchmarks" ON)
 option(UCORO_BUILD_EXAMPLES "Build examples" ON)
