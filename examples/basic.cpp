@@ -69,10 +69,10 @@ int main()
     if (data_coro)
     {
         // send data to coroutine
-        data_coro->push(21);
+        (void)data_coro->push(21);
 
         // run coroutine
-        data_coro->resume();
+        (void)data_coro->resume();
 
         // receive result
         auto result = data_coro->pop<int>();
