@@ -8,24 +8,29 @@ on:
 
 jobs:
     asan:
-        name: ASan & UBSan (Linux Clang 18)
+        name: ASan (Linux Clang 18 + libc++)
         runs-on: ubuntu-22.04
         steps:
             - uses: actions/checkout@v4
 
-            - name: Install dependencies (Clang 18)
+            - name: Install dependencies
               run: |
+                  # Install Clang 18
                   wget https://apt.llvm.org/llvm.sh
                   chmod +x llvm.sh
                   sudo ./llvm.sh 18
-                  sudo apt-get install -y cmake ninja-build
+                  # Install libc++ (LLVM STL) for full C++23 support
+                  sudo apt-get install -y cmake ninja-build libc++-18-dev libc++abi-18-dev
 
             - name: Configure
               env:
                   CC: clang-18
                   CXX: clang++-18
               run: |
+                  # -stdlib=libc++ tells Clang to use LLVM's STL instead of the system GNU STL
                   cmake -B build -G "Ninja" -DCMAKE_BUILD_TYPE=Debug \
+                    -DCMAKE_CXX_FLAGS="-stdlib=libc++" \
+                    -DCMAKE_EXE_LINKER_FLAGS="-stdlib=libc++ -lc++abi" \
                     -DUCRO_ENABLE_SANITIZERS=ON \
                     -DUCRO_BUILD_TESTS=ON
 
