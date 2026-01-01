@@ -14,29 +14,51 @@ jobs:
             fail-fast: false
             matrix:
                 include:
+                    # Linux: GCC 14 (Native C++23 support)
                     - os: ubuntu-22.04
-                      compiler: gcc
-                      cc: gcc-11
-                      cxx: g++-11
+                      compiler: gcc-14
+                      install_cmd: |
+                          sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
+                          sudo apt-get update
+                          sudo apt-get install -y gcc-14 g++-14 cmake ninja-build
+                      cc: gcc-14
+                      cxx: g++-14
+
+                    # Linux: Clang 18 (Using GCC 14's STL for <print>/<expected>)
                     - os: ubuntu-22.04
-                      compiler: clang
-                      cc: clang-14
-                      cxx: clang++-14
+                      compiler: clang-18
+                      install_cmd: |
+                          wget https://apt.llvm.org/llvm.sh
+                          chmod +x llvm.sh
+                          sudo ./llvm.sh 18
+                          # We install g++-14 so Clang can find the C++23 standard library headers
+                          sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
+                          sudo apt-get update
+                          sudo apt-get install -y gcc-14 g++-14 cmake ninja-build
+                      cc: clang-18
+                      cxx: clang++-18
+
+                    # macOS: Apple Clang (Latest)
+                    # Note: macOS 14 runner uses Xcode 15+ which supports <expected>.
+                    # <print> might still be missing; if so, we might need a fallback, but let's try.
                     - os: macos-14
                       compiler: apple-clang
-                      # Uses default Xcode compiler on macOS 14 (ARM64)
-                    - os: windows-2022
+                      install_cmd: brew install cmake ninja
+                      cc: clang
+                      cxx: clang++
+
+                    # Windows: MSVC (Latest)
+                    - os: windows-latest
                       compiler: msvc
-                      # Uses default MSVC
+                      install_cmd: echo "MSVC is pre-installed"
 
         steps:
             - uses: actions/checkout@v4
 
-            - name: Set up dependencies (Linux)
-              if: runner.os == 'Linux'
-              run: |
-                  sudo apt-get update
-                  sudo apt-get install -y cmake ninja-build
+            - name: Install Dependencies
+              run: ${{ matrix.install_cmd }}
+              if: runner.os != 'Windows'
+              shell: bash
 
             - name: Configure CMake
               run: |
@@ -64,9 +86,13 @@ jobs:
               working-directory: build
               run: ctest --output-on-failure -C Release
 
-            - name: Run Benchmarks
+            # Benchmarks
+            - name: Run Benchmarks (Unix)
+              if: runner.os != 'Windows'
               working-directory: build
-              run: |
-                  ./benchmark_ucoro || .\Release\benchmark_ucoro.exe
-              # Simple conditional execution for bash/powershell
-              continue-on-error: true
+              run: ./benchmark_ucoro || true
+
+            - name: Run Benchmarks (Windows)
+              if: runner.os == 'Windows'
+              working-directory: build
+              run: .\Release\benchmark_ucoro.exe || true
