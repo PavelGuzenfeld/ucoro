@@ -15,6 +15,17 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# Enable Link Time Optimization (LTO) / Interprocedural Optimization (IPO)
+# This allows the compiler to inline code even across object boundaries
+include(CheckIPOSupported)
+check_ipo_supported(RESULT result OUTPUT output)
+if(result)
+    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
+    message(STATUS "IPO/LTO enabled")
+else()
+    message(WARNING "IPO/LTO not supported: ${output}")
+endif()
+
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     add_compile_options(
         -Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion
@@ -42,6 +53,9 @@ if(UCORO_BUILD_TESTS)
     FetchContent_MakeAvailable(doctest)
 endif()
 
+# Check for Boost
+find_package(Boost COMPONENTS context QUIET)
+
 # Library Target
 add_library(ucoro INTERFACE)
 add_library(ucoro::ucoro ALIAS ucoro)
@@ -67,6 +81,18 @@ if(UCORO_BUILD_BENCHMARKS)
     add_executable(benchmark_ucoro benchmarks/benchmark_ucoro.cpp)
     target_link_libraries(benchmark_ucoro PRIVATE ucoro)
     target_compile_options(benchmark_ucoro PRIVATE $<$<CONFIG:Release>:-O3> $<$<CONFIG:Debug>:-O2>)
+    
+    if(UNIX)
+        target_compile_definitions(benchmark_ucoro PRIVATE HAVE_UCONTEXT)
+        if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+            target_compile_options(benchmark_ucoro PRIVATE -Wno-deprecated-declarations)
+        endif()
+    endif()
+
+    if(Boost_FOUND)
+        target_link_libraries(benchmark_ucoro PRIVATE Boost::context)
+        target_compile_definitions(benchmark_ucoro PRIVATE HAVE_BOOST_CONTEXT)
+    endif()
 endif()
 
 # Examples
@@ -86,7 +112,6 @@ install(TARGETS ucoro
     INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
 
-# Only installing ucoro.hpp now
 install(FILES 
     include/ucoro/ucoro.hpp
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/ucoro
