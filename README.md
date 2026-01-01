@@ -1,13 +1,8 @@
 # µcoro (ucoro)
 
-A modern C++23 coroutine library providing **stackful coroutines** with blazing-fast context switching. Header-only, zero dependencies (except fmt), cross-platform.
+A modern C++23 coroutine library providing **stackful coroutines** with blazing-fast context switching. Header-only, cross-platform.
 
-[![CI](https://github.com/user/ucoro/actions/workflows/ci.yml/badge.svg)](https://github.com/user/ucoro/actions/workflows/ci.yml)
-[![Sanitizers](https://github.com/user/ucoro/actions/workflows/sanitizers.yml/badge.svg)](https://github.com/user/ucoro/actions/workflows/sanitizers.yml)
-[![C++23](https://img.shields.io/badge/C%2B%2B-23-blue.svg)](https://en.cppreference.com/w/cpp/23)
-[![License](https://img.shields.io/badge/license-MIT%2FUnlicense-green.svg)](LICENSE)
-[![Header Only](https://img.shields.io/badge/header--only-yes-brightgreen.svg)]()
-[![Platform](https://img.shields.io/badge/platform-windows%20%7C%20linux%20%7C%20macos-lightgrey.svg)]()
+[![CI](https://github.com/user/ucoro/actions/workflows/ci.yml/badge.svg)](https://github.com/user/ucoro/actions/workflows/ci.yml) [![Sanitizers](https://github.com/user/ucoro/actions/workflows/sanitizers.yml/badge.svg)](https://github.com/user/ucoro/actions/workflows/sanitizers.yml) [![C++23](https://img.shields.io/badge/C%2B%2B-23-blue.svg)](https://en.cppreference.com/w/cpp/23) [![License](https://img.shields.io/badge/license-MIT%2FUnlicense-green.svg)](LICENSE) [![Header Only](https://img.shields.io/badge/header--only-yes-brightgreen.svg)]() [![Platform](https://img.shields.io/badge/platform-windows%20%7C%20linux%20%7C%20macos-lightgrey.svg)]()
 
 | Compiler | Minimum Version |
 |----------|-----------------|
