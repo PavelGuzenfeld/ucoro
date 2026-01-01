@@ -9,7 +9,8 @@
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
-#include <cstring> // For memset/memcpy
+#include <cstdlib> // For calloc/free
+#include <cstring> // For memcpy
 #include <expected>
 #include <format>
 #include <functional>
@@ -24,8 +25,6 @@
 // ============================================================================
 // Configuration (Externalizable via Build Parameters)
 // ============================================================================
-
-// Override these defaults using compiler flags (e.g., -DUCORO_STACK_SIZE=65536)
 
 #ifndef UCORO_STACK_SIZE
 #define UCORO_STACK_SIZE (56 * 1024)
@@ -47,7 +46,6 @@ namespace coro
 
     namespace detail
     {
-        // Magic number for stack corruption detection
         static constexpr std::size_t magic_number = 0x7E3CB1A9;
     }
 
@@ -63,7 +61,6 @@ namespace coro
         [[nodiscard]] constexpr explicit storage_size(std::size_t v) noexcept : value{v} {}
     };
 
-    // Public constants derived from build parameters
     inline constexpr stack_size default_stack_size{UCORO_STACK_SIZE};
     inline constexpr storage_size default_storage_size{UCORO_STORAGE_SIZE};
     inline constexpr stack_size min_stack_size{UCORO_MIN_STACK_SIZE};
@@ -74,8 +71,21 @@ namespace coro
         // Internal Types & Forward Declarations
         // ============================================================================
 
-        // Thread local pointer to current coroutine
         extern thread_local struct mco_coro *mco_current_co;
+
+        // Default Allocators (Defined inline to avoid linkage issues)
+        inline void *mco_alloc(std::size_t size, void *allocator_data)
+        {
+            (void)allocator_data;
+            return std::calloc(1, size);
+        }
+
+        inline void mco_dealloc(void *ptr, std::size_t size, void *allocator_data)
+        {
+            (void)size;
+            (void)allocator_data;
+            std::free(ptr);
+        }
 
         enum class mco_state
         {
@@ -125,14 +135,14 @@ namespace coro
 
         struct mco_desc
         {
-            void (*func)(mco_coro *co);
-            void *user_data;
-            void *(*alloc_cb)(std::size_t size, void *allocator_data);
-            void (*dealloc_cb)(void *ptr, std::size_t size, void *allocator_data);
-            void *allocator_data;
-            std::size_t storage_size;
-            std::size_t coro_size;
-            std::size_t stack_size;
+            void (*func)(mco_coro *co) = nullptr;
+            void *user_data = nullptr;
+            void *(*alloc_cb)(std::size_t size, void *allocator_data) = nullptr;
+            void (*dealloc_cb)(void *ptr, std::size_t size, void *allocator_data) = nullptr;
+            void *allocator_data = nullptr;
+            std::size_t storage_size = 0;
+            std::size_t coro_size = 0;
+            std::size_t stack_size = 0;
         };
 
 #if defined(__x86_64__) && !defined(_WIN32)
@@ -145,13 +155,59 @@ namespace coro
             mco_ctxbuf ctx;
             mco_ctxbuf back_ctx;
         };
-
         extern "C" int _mco_switch(mco_ctxbuf *from, mco_ctxbuf *to);
 #else
 #error "Only x86_64 Linux/macOS supported in this version."
 #endif
 
-        // Inline helper to prepare state before jumping IN to a coroutine
+        // ============================================================================
+        // Constexpr Helpers (Moved out of IMPL for compile-time usage)
+        // ============================================================================
+
+        [[nodiscard]] constexpr std::size_t mco_align_forward(std::size_t addr, std::size_t align)
+        {
+            return (addr + (align - 1)) & ~(align - 1);
+        }
+
+        constexpr void mco_init_desc_sizes(mco_desc *desc, std::size_t stack_size)
+        {
+            // Calculate exact memory requirements at compile time
+            desc->coro_size = mco_align_forward(sizeof(mco_coro), 16) +
+                              mco_align_forward(sizeof(mco_context), 16) +
+                              mco_align_forward(desc->storage_size, 16) +
+                              stack_size + 16;
+            desc->stack_size = stack_size;
+        }
+
+        [[nodiscard]] constexpr mco_desc mco_desc_init(void (*func)(mco_coro *co), std::size_t stack_size)
+        {
+            // Zero-init via aggregate initialization
+            mco_desc desc{};
+
+            if (stack_size != 0)
+            {
+                if (stack_size < min_stack_size.value)
+                    stack_size = min_stack_size.value;
+            }
+            else
+            {
+                stack_size = default_stack_size.value;
+            }
+            stack_size = mco_align_forward(stack_size, 16);
+
+            desc.alloc_cb = mco_alloc;
+            desc.dealloc_cb = mco_dealloc;
+            desc.func = func;
+            desc.storage_size = default_storage_size.value;
+
+            mco_init_desc_sizes(&desc, stack_size);
+            return desc;
+        }
+
+        // ============================================================================
+        // Runtime Inline Helpers
+        // ============================================================================
+
         inline void mco_prepare_jumpin(mco_coro *co)
         {
             mco_coro *prev_co = mco_current_co;
@@ -161,7 +217,6 @@ namespace coro
             mco_current_co = co;
         }
 
-        // Inline helper to prepare state before jumping OUT of a coroutine
         inline void mco_prepare_jumpout(mco_coro *co)
         {
             mco_coro *prev_co = co->prev_co;
@@ -183,7 +238,6 @@ namespace coro
         std::size_t mco_get_storage_size(mco_coro *co);
         mco_coro *mco_running(void);
         mco_result mco_destroy(mco_coro *co);
-        mco_desc mco_desc_init(void (*func)(mco_coro *co), std::size_t stack_size);
         mco_result mco_create(mco_coro **out_co, mco_desc *desc);
 
     } // namespace detail
@@ -302,7 +356,6 @@ namespace coro
             return {};
         }
 
-        // --- High Performance Unsafe API ---
         void yield_unchecked() const noexcept
         {
             handle_->state = detail::mco_state::suspended;
@@ -326,13 +379,8 @@ namespace coro
             std::memcpy(&value, &handle_->storage[handle_->bytes_stored], sizeof(T));
             return value;
         }
-        // -----------------------------------
 
-        [[nodiscard]] auto status() const noexcept -> state
-        {
-            return static_cast<state>(detail::mco_status(handle_));
-        }
-
+        [[nodiscard]] auto status() const noexcept -> state { return static_cast<state>(detail::mco_status(handle_)); }
         [[nodiscard]] constexpr auto valid() const noexcept -> bool { return handle_ != nullptr; }
         [[nodiscard]] constexpr explicit operator bool() const noexcept { return valid(); }
 
@@ -419,7 +467,7 @@ namespace coro
             detail::mco_desc desc = detail::mco_desc_init(&coroutine::entry_point, stack.value);
             desc.user_data = wrapper;
 
-            if (storage.value != 1024)
+            if (storage.value != default_storage_size.value)
             {
                 desc.storage_size = storage.value;
                 auto const align16 = [](std::size_t addr)
@@ -467,7 +515,6 @@ namespace coro
             return {};
         }
 
-        // --- High Performance Unsafe API ---
         void resume_unchecked() const noexcept
         {
             handle_->state = detail::mco_state::running;
@@ -481,7 +528,6 @@ namespace coro
 
         template <storable T>
         T pop_unchecked() const noexcept { return handle().pop_unchecked<T>(); }
-        // -----------------------------------
 
         [[nodiscard]] auto status() const noexcept -> state { return static_cast<state>(detail::mco_status(handle_)); }
         [[nodiscard]] auto done() const noexcept -> bool { return status() == state::dead; }
@@ -708,29 +754,11 @@ struct std::formatter<coro::state> : std::formatter<std::string_view>
 
 #ifdef UCORO_IMPL
 
-#include <cstdlib> // calloc, free
+// mco_alloc and mco_dealloc definitions REMOVED from here (now inline in header)
 
 namespace coro::detail
 {
     thread_local mco_coro *mco_current_co = nullptr;
-
-    static inline std::size_t mco_align_forward(std::size_t addr, std::size_t align)
-    {
-        return (addr + (align - 1)) & ~(align - 1);
-    }
-
-    static void *mco_alloc(std::size_t size, void *allocator_data)
-    {
-        (void)allocator_data;
-        return calloc(1, size);
-    }
-
-    static void mco_dealloc(void *ptr, std::size_t size, void *allocator_data)
-    {
-        (void)size;
-        (void)allocator_data;
-        free(ptr);
-    }
 
     extern "C" void _mco_wrap_main(void);
 
@@ -793,7 +821,6 @@ namespace coro::detail
     {
         stack_size = stack_size - 128; /* Red Zone */
 
-        // Use uintptr_t for pointer arithmetic
         std::uintptr_t base_addr = reinterpret_cast<std::uintptr_t>(stack_base);
         std::uintptr_t high_addr = base_addr + stack_size - sizeof(std::size_t);
 
@@ -833,18 +860,8 @@ namespace coro::detail
         _mco_switch(&context->ctx, &context->back_ctx);
     }
 
-    static inline void mco_init_desc_sizes(mco_desc *desc, std::size_t stack_size)
-    {
-        desc->coro_size = mco_align_forward(sizeof(mco_coro), 16) +
-                          mco_align_forward(sizeof(mco_context), 16) +
-                          mco_align_forward(desc->storage_size, 16) +
-                          stack_size + 16;
-        desc->stack_size = stack_size;
-    }
-
     static mco_result mco_create_context(mco_coro *co, mco_desc *desc)
     {
-        // Use uintptr_t for address arithmetic
         std::uintptr_t co_addr = reinterpret_cast<std::uintptr_t>(co);
         std::uintptr_t context_addr = mco_align_forward(co_addr + sizeof(mco_coro), 16);
         std::uintptr_t storage_addr = mco_align_forward(context_addr + sizeof(mco_context), 16);
@@ -867,31 +884,6 @@ namespace coro::detail
         co->storage = storage;
         co->storage_size = desc->storage_size;
         return mco_result::success;
-    }
-
-    // ------------------- API Implementations -------------------
-
-    mco_desc mco_desc_init(void (*func)(mco_coro *co), std::size_t stack_size)
-    {
-        if (stack_size != 0)
-        {
-            if (stack_size < min_stack_size.value)
-                stack_size = min_stack_size.value;
-        }
-        else
-        {
-            stack_size = default_stack_size.value;
-        }
-        stack_size = mco_align_forward(stack_size, 16);
-
-        mco_desc desc;
-        std::memset(&desc, 0, sizeof(mco_desc));
-        desc.alloc_cb = mco_alloc;
-        desc.dealloc_cb = mco_dealloc;
-        desc.func = func;
-        desc.storage_size = default_storage_size.value;
-        mco_init_desc_sizes(&desc, stack_size);
-        return desc;
     }
 
     mco_result mco_init(mco_coro *co, mco_desc *desc)
