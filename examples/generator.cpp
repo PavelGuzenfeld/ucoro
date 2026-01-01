@@ -2,7 +2,6 @@
 // because yield is the new return
 
 #define UCORO_IMPL
-#include "ucoro/impl/minicoro_impl.h"
 #include "ucoro/ucoro.hpp"
 
 #include <cmath>

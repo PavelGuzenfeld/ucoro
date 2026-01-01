@@ -4,7 +4,6 @@
 // compile with: g++ -std=c++23 -O3 -I../include -I../src -o benchmark_ucoro benchmark_ucoro.cpp
 
 #define UCORO_IMPL
-#include "ucoro/impl/minicoro_impl.h"
 #include "ucoro/ucoro.hpp"
 
 #include <algorithm>
@@ -195,7 +194,6 @@ void bench_memory_overhead()
     std::cout << "┌─────────────────────────────────────────────────────────────\n";
     std::cout << "│ memory overhead analysis\n";
     std::cout << "├─────────────────────────────────────────────────────────────\n";
-    std::cout << "│ sizeof(mco_coro):          " << std::setw(6) << sizeof(mco_coro) << " bytes\n";
     std::cout << "│ sizeof(coro::coroutine):   " << std::setw(6) << sizeof(coro::coroutine) << " bytes\n";
     std::cout << "│ sizeof(coroutine_handle):  " << std::setw(6) << sizeof(coro::coroutine_handle) << " bytes\n";
     std::cout << "│ sizeof(coro::error):       " << std::setw(6) << sizeof(coro::error) << " bytes\n";
