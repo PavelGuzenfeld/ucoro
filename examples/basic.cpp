@@ -4,62 +4,63 @@
 #define UCORO_IMPL
 #include "ucoro/ucoro.hpp"
 
-#include <iostream>
+#include <cstdio> // for stderr
+#include <print>
 
 int main()
 {
-    std::cout << "=== basic coroutine example ===\n\n";
+    std::println("=== basic coroutine example ===\n");
 
     // create a simple coroutine that yields a few times
     auto coro_result = coro::coroutine::create([](coro::coroutine_handle h)
                                                {
-        std::cout << "coroutine: starting\n";
+        std::println("coroutine: starting");
         
-        std::cout << "coroutine: doing some work...\n";
+        std::println("coroutine: doing some work...");
         [[maybe_unused]] auto _ = h.yield();
         
-        std::cout << "coroutine: resumed, doing more work...\n";
+        std::println("coroutine: resumed, doing more work...");
         [[maybe_unused]] auto __ = h.yield();
         
-        std::cout << "coroutine: finishing up\n"; });
+        std::println("coroutine: finishing up"); });
 
     if (!coro_result)
     {
-        std::cerr << "failed to create coroutine: " << coro::to_string(coro_result.error()) << "\n";
+        std::println(stderr, "failed to create coroutine: {}", coro::to_string(coro_result.error()));
         return 1;
     }
 
     auto &coro = *coro_result;
 
-    std::cout << "main: coroutine created, status = " << coro::to_string(coro.status()) << "\n";
+    std::println("main: coroutine created, status = {}", coro::to_string(coro.status()));
 
     // resume until completion
     int step = 1;
     while (!coro.done())
     {
-        std::cout << "\nmain: resuming coroutine (step " << step++ << ")\n";
+        std::println("\nmain: resuming coroutine (step {})", step++);
 
         auto resume_result = coro.resume();
         if (!resume_result)
         {
-            std::cerr << "resume failed: " << coro::to_string(resume_result.error()) << "\n";
+            std::println(stderr, "resume failed: {}", coro::to_string(resume_result.error()));
             return 1;
         }
 
-        std::cout << "main: coroutine yielded, status = " << coro::to_string(coro.status()) << "\n";
+        std::println("main: coroutine yielded, status = {}", coro::to_string(coro.status()));
     }
 
-    std::cout << "\nmain: coroutine completed\n";
+    std::println("\nmain: coroutine completed");
 
     // demonstrate storage (data passing)
-    std::cout << "\n=== data passing example ===\n\n";
+    std::println("\n=== data passing example ===\n");
 
     auto data_coro = coro::coroutine::create([](coro::coroutine_handle h)
                                              {
         // receive data from main
         auto value = h.pop<int>();
         if (value) {
-            std::cout << "coroutine: received value = " << *value << "\n";
+            std::println("coroutine: received value = {}", *value);
             
             // modify and send back
             [[maybe_unused]] auto _ = h.push(*value * 2);
@@ -77,10 +78,10 @@ int main()
         auto result = data_coro->pop<int>();
         if (result)
         {
-            std::cout << "main: received result = " << *result << "\n";
+            std::println("main: received result = {}", *result);
         }
     }
 
-    std::cout << "\ndone!\n";
+    std::println("\ndone!");
     return 0;
 }
