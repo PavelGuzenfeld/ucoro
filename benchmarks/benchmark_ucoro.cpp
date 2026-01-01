@@ -8,8 +8,8 @@
 
 #include <algorithm>
 #include <chrono>
+#include <fmt/core.h>
 #include <numeric>
-#include <print>
 #include <vector>
 
 // --- Optional Dependencies ---
@@ -93,17 +93,17 @@ public:
 
     static void print_result(result const &r)
     {
-        std::println("┌─────────────────────────────────────────────────────────────");
-        std::println("│ {}", r.name);
-        std::println("├─────────────────────────────────────────────────────────────");
-        std::println("│ iterations:   {:15}", r.iterations);
-        std::println("│ total time:   {:15.3f} ms", std::chrono::duration<double, std::milli>(r.total_time).count());
-        std::println("│ mean time:    {:15.1f} ns", static_cast<double>(r.mean_time.count()));
-        std::println("│ median time:  {:15.1f} ns", static_cast<double>(r.median_time.count()));
-        std::println("│ min time:     {:15.1f} ns", static_cast<double>(r.min_time.count()));
-        std::println("│ max time:     {:15.1f} ns", static_cast<double>(r.max_time.count()));
-        std::println("│ ops/sec:      {:15.0f}", r.ops_per_second);
-        std::println("└─────────────────────────────────────────────────────────────\n");
+        fmt::print("┌─────────────────────────────────────────────────────────────");
+        fmt::print("│ {}", r.name);
+        fmt::print("├─────────────────────────────────────────────────────────────");
+        fmt::print("│ iterations:   {:15}", r.iterations);
+        fmt::print("│ total time:   {:15.3f} ms", std::chrono::duration<double, std::milli>(r.total_time).count());
+        fmt::print("│ mean time:    {:15.1f} ns", static_cast<double>(r.mean_time.count()));
+        fmt::print("│ median time:  {:15.1f} ns", static_cast<double>(r.median_time.count()));
+        fmt::print("│ min time:     {:15.1f} ns", static_cast<double>(r.min_time.count()));
+        fmt::print("│ max time:     {:15.1f} ns", static_cast<double>(r.max_time.count()));
+        fmt::print("│ ops/sec:      {:15.0f}", r.ops_per_second);
+        fmt::print("└─────────────────────────────────────────────────────────────\n");
     }
 };
 
@@ -233,7 +233,7 @@ void bench_context_switch()
         benchmark::print_result(result_uctx);
     }
 #else
-    std::println("Skipping ucontext benchmark (not supported/enabled)");
+    fmt::print("Skipping ucontext benchmark (not supported/enabled)");
 #endif
 
     // 4. Boost.Context
@@ -256,7 +256,7 @@ void bench_context_switch()
         benchmark::print_result(result_boost);
     }
 #else
-    std::println("Skipping Boost.Context benchmark (library not found)");
+    fmt::print("Skipping Boost.Context benchmark (library not found)");
 #endif
 }
 
@@ -331,7 +331,7 @@ void bench_generator_iteration()
 
     if (!gen_result)
     {
-        std::println(stderr, "failed to create generator for iteration benchmark");
+        fmt::print(stderr, "failed to create generator for iteration benchmark");
         return;
     }
 
@@ -344,26 +344,26 @@ void bench_generator_iteration()
 
 void bench_memory_overhead()
 {
-    std::println("┌─────────────────────────────────────────────────────────────");
-    std::println("│ memory overhead analysis");
-    std::println("├─────────────────────────────────────────────────────────────");
-    std::println("│ sizeof(mco_coro):          {:6} bytes", sizeof(coro::detail::mco_coro));
-    std::println("│ sizeof(coro::coroutine):   {:6} bytes", sizeof(coro::coroutine));
-    std::println("│ sizeof(coroutine_handle):  {:6} bytes", sizeof(coro::coroutine_handle));
-    std::println("│ sizeof(coro::error):       {:6} bytes", sizeof(coro::error));
-    std::println("│ sizeof(coro::state):       {:6} bytes", sizeof(coro::state));
-    std::println("│ sizeof(coro::stack_size):  {:6} bytes", sizeof(coro::stack_size));
-    std::println("│ sizeof(coro::task_runner): {:6} bytes", sizeof(coro::task_runner));
-    std::println("│ default stack size:        {:6} bytes", coro::default_stack_size.value);
-    std::println("│ default storage size:      {:6} bytes", coro::default_storage_size.value);
-    std::println("└─────────────────────────────────────────────────────────────\n");
+    fmt::print("┌─────────────────────────────────────────────────────────────");
+    fmt::print("│ memory overhead analysis");
+    fmt::print("├─────────────────────────────────────────────────────────────");
+    fmt::print("│ sizeof(mco_coro):          {:6} bytes", sizeof(coro::detail::mco_coro));
+    fmt::print("│ sizeof(coro::coroutine):   {:6} bytes", sizeof(coro::coroutine));
+    fmt::print("│ sizeof(coroutine_handle):  {:6} bytes", sizeof(coro::coroutine_handle));
+    fmt::print("│ sizeof(coro::error):       {:6} bytes", sizeof(coro::error));
+    fmt::print("│ sizeof(coro::state):       {:6} bytes", sizeof(coro::state));
+    fmt::print("│ sizeof(coro::stack_size):  {:6} bytes", sizeof(coro::stack_size));
+    fmt::print("│ sizeof(coro::task_runner): {:6} bytes", sizeof(coro::task_runner));
+    fmt::print("│ default stack size:        {:6} bytes", coro::default_stack_size.value);
+    fmt::print("│ default storage size:      {:6} bytes", coro::default_storage_size.value);
+    fmt::print("└─────────────────────────────────────────────────────────────\n");
 }
 
 void bench_allocation_pattern()
 {
-    std::println("┌─────────────────────────────────────────────────────────────");
-    std::println("│ allocation pattern analysis");
-    std::println("├─────────────────────────────────────────────────────────────");
+    fmt::print("┌─────────────────────────────────────────────────────────────");
+    fmt::print("│ allocation pattern analysis");
+    fmt::print("├─────────────────────────────────────────────────────────────");
 
     constexpr std::size_t count = 1000;
     std::vector<coro::coroutine> coroutines;
@@ -389,11 +389,11 @@ void bench_allocation_pattern()
     auto const create_time = std::chrono::duration<double, std::milli>(after_create - start).count();
     auto const destroy_time = std::chrono::duration<double, std::milli>(after_destroy - after_create).count();
 
-    std::println("│ created {} coroutines in {:.2f} ms ({:.1f} ns each)",
+    fmt::print("│ created {} coroutines in {:.2f} ms ({:.1f} ns each)",
                  count, create_time, create_time * 1e6 / static_cast<double>(count));
-    std::println("│ destroyed {} coroutines in {:.2f} ms ({:.1f} ns each)",
+    fmt::print("│ destroyed {} coroutines in {:.2f} ms ({:.1f} ns each)",
                  count, destroy_time, destroy_time * 1e6 / static_cast<double>(count));
-    std::println("└─────────────────────────────────────────────────────────────\n");
+    fmt::print("└─────────────────────────────────────────────────────────────\n");
 }
 
 // ============================================================================
@@ -402,9 +402,9 @@ void bench_allocation_pattern()
 
 int main()
 {
-    std::println("═══════════════════════════════════════════════════════════════");
-    std::println("              ucoro C++23 wrapper benchmarks                ");
-    std::println("═══════════════════════════════════════════════════════════════\n");
+    fmt::print("═══════════════════════════════════════════════════════════════");
+    fmt::print("              ucoro C++23 wrapper benchmarks                ");
+    fmt::print("═══════════════════════════════════════════════════════════════\n");
 
     bench_memory_overhead();
     bench_allocation_pattern();
@@ -413,9 +413,9 @@ int main()
     bench_storage_push_pop();
     bench_generator_iteration();
 
-    std::println("═══════════════════════════════════════════════════════════════");
-    std::println("                     benchmarks complete                       ");
-    std::println("═══════════════════════════════════════════════════════════════");
+    fmt::print("═══════════════════════════════════════════════════════════════");
+    fmt::print("                     benchmarks complete                       ");
+    fmt::print("═══════════════════════════════════════════════════════════════");
 
     return 0;
 }

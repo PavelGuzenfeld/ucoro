@@ -9,10 +9,9 @@
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
-#include <cstdlib> // For calloc/free
-#include <cstring> // For memcpy
+#include <cstdlib>
+#include <cstring>
 #include <expected>
-#include <format>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -21,6 +20,8 @@
 #include <type_traits>
 #include <utility>
 #include <vector>
+
+#include <fmt/core.h> // Replaces <format> and <print>
 
 // ============================================================================
 // Configuration (Externalizable via Build Parameters)
@@ -40,13 +41,34 @@
 
 namespace coro
 {
-    // ============================================================================
-    // Constants & Strong Types
-    // ============================================================================
-
     namespace detail
     {
         static constexpr std::size_t magic_number = 0x7E3CB1A9;
+
+        enum class mco_result
+        {
+            success = 0,
+            generic_error,
+            invalid_pointer,
+            invalid_coroutine,
+            not_suspended,
+            not_running,
+            make_context_error,
+            switch_context_error,
+            not_enough_space,
+            out_of_memory,
+            invalid_arguments,
+            invalid_operation,
+            stack_overflow
+        };
+
+        enum class mco_state
+        {
+            dead = 0,
+            normal,
+            running,
+            suspended
+        };
     }
 
     struct stack_size
@@ -65,6 +87,119 @@ namespace coro
     inline constexpr storage_size default_storage_size{UCORO_STORAGE_SIZE};
     inline constexpr stack_size min_stack_size{UCORO_MIN_STACK_SIZE};
 
+    // ============================================================================
+    // Public API Types
+    // ============================================================================
+
+    enum class [[nodiscard]] error : std::uint8_t
+    {
+        success = static_cast<std::uint8_t>(detail::mco_result::success),
+        generic_error = static_cast<std::uint8_t>(detail::mco_result::generic_error),
+        invalid_pointer = static_cast<std::uint8_t>(detail::mco_result::invalid_pointer),
+        invalid_coroutine = static_cast<std::uint8_t>(detail::mco_result::invalid_coroutine),
+        not_suspended = static_cast<std::uint8_t>(detail::mco_result::not_suspended),
+        not_running = static_cast<std::uint8_t>(detail::mco_result::not_running),
+        make_context_error = static_cast<std::uint8_t>(detail::mco_result::make_context_error),
+        switch_context_error = static_cast<std::uint8_t>(detail::mco_result::switch_context_error),
+        not_enough_space = static_cast<std::uint8_t>(detail::mco_result::not_enough_space),
+        out_of_memory = static_cast<std::uint8_t>(detail::mco_result::out_of_memory),
+        invalid_arguments = static_cast<std::uint8_t>(detail::mco_result::invalid_arguments),
+        invalid_operation = static_cast<std::uint8_t>(detail::mco_result::invalid_operation),
+        stack_overflow = static_cast<std::uint8_t>(detail::mco_result::stack_overflow)
+    };
+
+    [[nodiscard]] constexpr auto to_string(error e) noexcept -> std::string_view
+    {
+        switch (e)
+        {
+        case error::success:
+            return "success";
+        case error::generic_error:
+            return "generic error";
+        case error::invalid_pointer:
+            return "invalid pointer";
+        case error::invalid_coroutine:
+            return "invalid coroutine";
+        case error::not_suspended:
+            return "coroutine not suspended";
+        case error::not_running:
+            return "coroutine not running";
+        case error::make_context_error:
+            return "make context error";
+        case error::switch_context_error:
+            return "switch context error";
+        case error::not_enough_space:
+            return "not enough space";
+        case error::out_of_memory:
+            return "out of memory";
+        case error::invalid_arguments:
+            return "invalid arguments";
+        case error::invalid_operation:
+            return "invalid operation";
+        case error::stack_overflow:
+            return "stack overflow";
+        }
+        return "unknown error";
+    }
+
+    [[nodiscard]] constexpr auto from_impl_result(detail::mco_result r) noexcept -> error
+    {
+        return static_cast<error>(r);
+    }
+
+    enum class [[nodiscard]] state : std::uint8_t
+    {
+        dead = static_cast<std::uint8_t>(detail::mco_state::dead),
+        normal = static_cast<std::uint8_t>(detail::mco_state::normal),
+        running = static_cast<std::uint8_t>(detail::mco_state::running),
+        suspended = static_cast<std::uint8_t>(detail::mco_state::suspended)
+    };
+
+    [[nodiscard]] constexpr auto to_string(state s) noexcept -> std::string_view
+    {
+        switch (s)
+        {
+        case state::dead:
+            return "dead";
+        case state::normal:
+            return "normal";
+        case state::running:
+            return "running";
+        case state::suspended:
+            return "suspended";
+        }
+        return "unknown state";
+    }
+}
+
+// ============================================================================
+// fmt Support (Using {fmt} library instead of std::format)
+// ============================================================================
+
+template <>
+struct fmt::formatter<coro::error>
+{
+    constexpr auto parse(fmt::format_parse_context &ctx) { return ctx.begin(); }
+
+    auto format(coro::error e, fmt::format_context &ctx) const
+    {
+        return fmt::format_to(ctx.out(), "{}", coro::to_string(e));
+    }
+};
+
+template <>
+struct fmt::formatter<coro::state>
+{
+    constexpr auto parse(fmt::format_parse_context &ctx) { return ctx.begin(); }
+
+    auto format(coro::state s, fmt::format_context &ctx) const
+    {
+        return fmt::format_to(ctx.out(), "{}", coro::to_string(s));
+    }
+};
+
+namespace coro
+{
     namespace detail
     {
         // ============================================================================
@@ -86,31 +221,6 @@ namespace coro
             (void)allocator_data;
             std::free(ptr);
         }
-
-        enum class mco_state
-        {
-            dead = 0,
-            normal,
-            running,
-            suspended
-        };
-
-        enum class mco_result
-        {
-            success = 0,
-            generic_error,
-            invalid_pointer,
-            invalid_coroutine,
-            not_suspended,
-            not_running,
-            make_context_error,
-            switch_context_error,
-            not_enough_space,
-            out_of_memory,
-            invalid_arguments,
-            invalid_operation,
-            stack_overflow
-        };
 
         struct mco_coro
         {
@@ -145,17 +255,13 @@ namespace coro
             std::size_t stack_size = 0;
         };
 
-        // ------------------- Architecture Detection -------------------
-
 #if defined(__x86_64__) && !defined(_WIN32)
-        // x86_64 Linux/macOS
         struct mco_ctxbuf
         {
             void *rip, *rsp, *rbp, *rbx, *r12, *r13, *r14, *r15;
         };
 
 #elif defined(__aarch64__) && !defined(_WIN32)
-        // ARM64 Linux/macOS
         struct mco_ctxbuf
         {
             void *x[12]; /* x19-x30 */
@@ -253,90 +359,6 @@ namespace coro
         mco_result mco_create(mco_coro **out_co, mco_desc *desc);
 
     } // namespace detail
-
-    // ============================================================================
-    // Public API Types
-    // ============================================================================
-
-    enum class [[nodiscard]] error : std::uint8_t
-    {
-        success = static_cast<std::uint8_t>(detail::mco_result::success),
-        generic_error = static_cast<std::uint8_t>(detail::mco_result::generic_error),
-        invalid_pointer = static_cast<std::uint8_t>(detail::mco_result::invalid_pointer),
-        invalid_coroutine = static_cast<std::uint8_t>(detail::mco_result::invalid_coroutine),
-        not_suspended = static_cast<std::uint8_t>(detail::mco_result::not_suspended),
-        not_running = static_cast<std::uint8_t>(detail::mco_result::not_running),
-        make_context_error = static_cast<std::uint8_t>(detail::mco_result::make_context_error),
-        switch_context_error = static_cast<std::uint8_t>(detail::mco_result::switch_context_error),
-        not_enough_space = static_cast<std::uint8_t>(detail::mco_result::not_enough_space),
-        out_of_memory = static_cast<std::uint8_t>(detail::mco_result::out_of_memory),
-        invalid_arguments = static_cast<std::uint8_t>(detail::mco_result::invalid_arguments),
-        invalid_operation = static_cast<std::uint8_t>(detail::mco_result::invalid_operation),
-        stack_overflow = static_cast<std::uint8_t>(detail::mco_result::stack_overflow)
-    };
-
-    [[nodiscard]] constexpr auto to_string(error e) noexcept -> std::string_view
-    {
-        switch (e)
-        {
-        case error::success:
-            return "success";
-        case error::generic_error:
-            return "generic error";
-        case error::invalid_pointer:
-            return "invalid pointer";
-        case error::invalid_coroutine:
-            return "invalid coroutine";
-        case error::not_suspended:
-            return "coroutine not suspended";
-        case error::not_running:
-            return "coroutine not running";
-        case error::make_context_error:
-            return "make context error";
-        case error::switch_context_error:
-            return "switch context error";
-        case error::not_enough_space:
-            return "not enough space";
-        case error::out_of_memory:
-            return "out of memory";
-        case error::invalid_arguments:
-            return "invalid arguments";
-        case error::invalid_operation:
-            return "invalid operation";
-        case error::stack_overflow:
-            return "stack overflow";
-        }
-        return "unknown error";
-    }
-
-    [[nodiscard]] constexpr auto from_impl_result(detail::mco_result r) noexcept -> error
-    {
-        return static_cast<error>(r);
-    }
-
-    enum class [[nodiscard]] state : std::uint8_t
-    {
-        dead = static_cast<std::uint8_t>(detail::mco_state::dead),
-        normal = static_cast<std::uint8_t>(detail::mco_state::normal),
-        running = static_cast<std::uint8_t>(detail::mco_state::running),
-        suspended = static_cast<std::uint8_t>(detail::mco_state::suspended)
-    };
-
-    [[nodiscard]] constexpr auto to_string(state s) noexcept -> std::string_view
-    {
-        switch (s)
-        {
-        case state::dead:
-            return "dead";
-        case state::normal:
-            return "normal";
-        case state::running:
-            return "running";
-        case state::suspended:
-            return "suspended";
-        }
-        return "unknown state";
-    }
 
     // ============================================================================
     // Concepts
@@ -737,32 +759,6 @@ namespace coro
         std::vector<coroutine> tasks_;
     };
 } // namespace coro
-
-// ============================================================================
-// std::format Support (Explicit Specialization)
-// ============================================================================
-
-template <>
-struct std::formatter<coro::error>
-{
-    constexpr auto parse(std::format_parse_context &ctx) { return ctx.begin(); }
-
-    auto format(coro::error e, std::format_context &ctx) const
-    {
-        return std::format_to(ctx.out(), "{}", coro::to_string(e));
-    }
-};
-
-template <>
-struct std::formatter<coro::state>
-{
-    constexpr auto parse(std::format_parse_context &ctx) { return ctx.begin(); }
-
-    auto format(coro::state s, std::format_context &ctx) const
-    {
-        return std::format_to(ctx.out(), "{}", coro::to_string(s));
-    }
-};
 
 // ============================================================================
 // Internal Implementation (minicoro integrated)
