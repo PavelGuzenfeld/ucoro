@@ -12,13 +12,14 @@
 
 #include <array>
 #include <atomic>
+#include <fmt/core.h>
 #include <numeric>
 #include <string>
 #include <thread>
 #include <vector>
 
 // ============================================================================
-// error enum tests - because even enums deserve validation
+// error enum tests
 // ============================================================================
 
 TEST_SUITE("error enum")
@@ -69,7 +70,7 @@ TEST_SUITE("state enum")
 }
 
 // ============================================================================
-// strong type tests - because raw size_t is for savages
+// strong type tests
 // ============================================================================
 
 TEST_SUITE("strong types")
@@ -88,7 +89,7 @@ TEST_SUITE("strong types")
 
     TEST_CASE("default values are sensible")
     {
-        // These rely on the #defines in ucoro.hpp
+        // These rely on the definitions in ucoro.hpp
         CHECK(coro::default_stack_size.value >= 32768UL);
         CHECK(coro::default_storage_size.value == 1024UL);
         CHECK(coro::min_stack_size.value == 32768UL);
@@ -96,7 +97,7 @@ TEST_SUITE("strong types")
 }
 
 // ============================================================================
-// coroutine_handle tests - the non-owning view
+// coroutine_handle tests
 // ============================================================================
 
 TEST_SUITE("coroutine_handle")
@@ -119,7 +120,7 @@ TEST_SUITE("coroutine_handle")
 }
 
 // ============================================================================
-// coroutine tests - the main event
+// coroutine tests
 // ============================================================================
 
 TEST_SUITE("coroutine")
@@ -276,7 +277,7 @@ TEST_SUITE("coroutine")
 }
 
 // ============================================================================
-// storage tests - push/pop/peek operations
+// storage tests
 // ============================================================================
 
 TEST_SUITE("storage")
@@ -518,7 +519,7 @@ TEST_SUITE("multithreading")
 }
 
 // ============================================================================
-// generator tests - python-style yield
+// generator tests
 // ============================================================================
 
 TEST_SUITE("generator")
@@ -611,7 +612,7 @@ TEST_SUITE("generator")
 }
 
 // ============================================================================
-// task_runner tests - cooperative multitasking
+// task_runner tests
 // ============================================================================
 
 TEST_SUITE("task_runner")
@@ -748,41 +749,41 @@ TEST_SUITE("task_runner")
 }
 
 // ============================================================================
-// format tests - std::format support
+// formatting tests (using fmt)
 // ============================================================================
 
 TEST_SUITE("formatting")
 {
     TEST_CASE("format error enum")
     {
-        auto str = std::format("{}", coro::error::success);
+        auto str = fmt::format("{}", coro::error::success);
         CHECK(str == "success");
 
-        str = std::format("{}", coro::error::out_of_memory);
+        str = fmt::format("{}", coro::error::out_of_memory);
         CHECK(str == "out of memory");
     }
 
     TEST_CASE("format state enum")
     {
-        auto str = std::format("{}", coro::state::running);
+        auto str = fmt::format("{}", coro::state::running);
         CHECK(str == "running");
 
-        str = std::format("{}", coro::state::dead);
+        str = fmt::format("{}", coro::state::dead);
         CHECK(str == "dead");
     }
 
     TEST_CASE("format in context")
     {
-        auto str = std::format("coroutine is {}", coro::state::suspended);
+        auto str = fmt::format("coroutine is {}", coro::state::suspended);
         CHECK(str == "coroutine is suspended");
 
-        str = std::format("error: {}", coro::error::invalid_arguments);
+        str = fmt::format("error: {}", coro::error::invalid_arguments);
         CHECK(str == "error: invalid arguments");
     }
 }
 
 // ============================================================================
-// edge cases and stress tests
+// edge cases
 // ============================================================================
 
 TEST_SUITE("edge cases")
@@ -885,7 +886,7 @@ TEST_SUITE("edge cases")
 }
 
 // ============================================================================
-// concept constraint tests - compile-time only
+// concepts tests
 // ============================================================================
 
 TEST_SUITE("concepts")

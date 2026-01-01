@@ -15,8 +15,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# Enable Link Time Optimization (LTO) / Interprocedural Optimization (IPO)
-# This allows the compiler to inline code even across object boundaries
+# Enable Link Time Optimization (LTO)
 include(CheckIPOSupported)
 check_ipo_supported(RESULT result OUTPUT output)
 if(result)
@@ -42,9 +41,19 @@ if(UCORO_ENABLE_SANITIZERS AND CMAKE_BUILD_TYPE STREQUAL "Debug")
     endif()
 endif()
 
-# Dependencies
+# --- Dependencies ---
+include(FetchContent)
+
+# 1. fmt (Replacement for <print> and <format>)
+FetchContent_Declare(
+    fmt
+    GIT_REPOSITORY https://github.com/fmtlib/fmt.git
+    GIT_TAG        10.2.1
+)
+FetchContent_MakeAvailable(fmt)
+
+# 2. doctest (For testing)
 if(UCORO_BUILD_TESTS)
-    include(FetchContent)
     FetchContent_Declare(
         doctest
         GIT_REPOSITORY https://github.com/doctest/doctest.git
@@ -66,6 +75,9 @@ target_include_directories(ucoro INTERFACE
 )
 
 target_compile_features(ucoro INTERFACE cxx_std_23)
+
+# Link fmt to the library interface so users get it automatically
+target_link_libraries(ucoro INTERFACE fmt::fmt)
 
 # Tests
 if(UCORO_BUILD_TESTS)
