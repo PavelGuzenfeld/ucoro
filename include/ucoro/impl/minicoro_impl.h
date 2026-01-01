@@ -10,7 +10,7 @@
 #ifndef UCORO_IMPL_H
 #define UCORO_IMPL_H
 
-#include "../include/ucoro/minicoro.h"
+#include "ucoro/minicoro.h"
 #include <stdlib.h>
 #include <string.h>
 
