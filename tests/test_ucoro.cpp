@@ -4,12 +4,12 @@
 // compile with: g++ -std=c++23 -I../include -I../src -o test_ucoro test_ucoro.cpp
 
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
-#include "doctest.h"
+#include <doctest/doctest.h>
 
 // define implementation before including the wrapper
 #define UCORO_IMPL
-#include "ucoro/ucoro.hpp"
 #include "ucoro/impl/minicoro_impl.h"
+#include "ucoro/ucoro.hpp"
 
 #include <numeric>
 #include <string>
