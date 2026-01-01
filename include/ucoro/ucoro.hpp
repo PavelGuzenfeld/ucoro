@@ -145,23 +145,37 @@ namespace coro
             std::size_t stack_size = 0;
         };
 
+        // ------------------- Architecture Detection -------------------
+
 #if defined(__x86_64__) && !defined(_WIN32)
+        // x86_64 Linux/macOS
         struct mco_ctxbuf
         {
             void *rip, *rsp, *rbp, *rbx, *r12, *r13, *r14, *r15;
         };
+
+#elif defined(__aarch64__) && !defined(_WIN32)
+        // ARM64 Linux/macOS
+        struct mco_ctxbuf
+        {
+            void *x[12]; /* x19-x30 */
+            void *sp;
+            void *lr;
+            void *d[8]; /* d8-d15 */
+        };
+#else
+#error "Only x86_64/ARM64 Linux/macOS supported in this version."
+#endif
+
         struct mco_context
         {
             mco_ctxbuf ctx;
             mco_ctxbuf back_ctx;
         };
         extern "C" int _mco_switch(mco_ctxbuf *from, mco_ctxbuf *to);
-#else
-#error "Only x86_64 Linux/macOS supported in this version."
-#endif
 
         // ============================================================================
-        // Constexpr Helpers (Moved out of IMPL for compile-time usage)
+        // Constexpr Helpers
         // ============================================================================
 
         [[nodiscard]] constexpr std::size_t mco_align_forward(std::size_t addr, std::size_t align)
@@ -171,7 +185,6 @@ namespace coro
 
         constexpr void mco_init_desc_sizes(mco_desc *desc, std::size_t stack_size)
         {
-            // Calculate exact memory requirements at compile time
             desc->coro_size = mco_align_forward(sizeof(mco_coro), 16) +
                               mco_align_forward(sizeof(mco_context), 16) +
                               mco_align_forward(desc->storage_size, 16) +
@@ -181,7 +194,6 @@ namespace coro
 
         [[nodiscard]] constexpr mco_desc mco_desc_init(void (*func)(mco_coro *co), std::size_t stack_size)
         {
-            // Zero-init via aggregate initialization
             mco_desc desc{};
 
             if (stack_size != 0)
@@ -754,7 +766,7 @@ struct std::formatter<coro::state> : std::formatter<std::string_view>
 
 #ifdef UCORO_IMPL
 
-// mco_alloc and mco_dealloc definitions REMOVED from here (now inline in header)
+#include <cstdlib> // calloc, free
 
 namespace coro::detail
 {
@@ -833,8 +845,90 @@ namespace coro::detail
         ctx->r13 = static_cast<void *>(co);
         return mco_result::success;
     }
+
+#elif defined(__aarch64__) && !defined(_WIN32)
+
+    __asm__(
+        ".text\n"
+#ifdef __MACH__
+        ".globl __mco_switch\n"
+        "__mco_switch:\n"
 #else
-#error "Only x86_64 Linux/macOS supported in this stripped version."
+        ".globl _mco_switch\n"
+        ".type _mco_switch #function\n"
+        ".hidden _mco_switch\n"
+        "_mco_switch:\n"
+#endif
+        "  mov x10, sp\n"
+        "  mov x11, x30\n"
+        "  stp x19, x20, [x0, #(0*16)]\n"
+        "  stp x21, x22, [x0, #(1*16)]\n"
+        "  stp d8, d9, [x0, #(7*16)]\n"
+        "  stp x23, x24, [x0, #(2*16)]\n"
+        "  stp d10, d11, [x0, #(8*16)]\n"
+        "  stp x25, x26, [x0, #(3*16)]\n"
+        "  stp d12, d13, [x0, #(9*16)]\n"
+        "  stp x27, x28, [x0, #(4*16)]\n"
+        "  stp d14, d15, [x0, #(10*16)]\n"
+        "  stp x29, x30, [x0, #(5*16)]\n"
+        "  stp x10, x11, [x0, #(6*16)]\n"
+        "  ldp x19, x20, [x1, #(0*16)]\n"
+        "  ldp x21, x22, [x1, #(1*16)]\n"
+        "  ldp d8, d9, [x1, #(7*16)]\n"
+        "  ldp x23, x24, [x1, #(2*16)]\n"
+        "  ldp d10, d11, [x1, #(8*16)]\n"
+        "  ldp x25, x26, [x1, #(3*16)]\n"
+        "  ldp d12, d13, [x1, #(9*16)]\n"
+        "  ldp x27, x28, [x1, #(4*16)]\n"
+        "  ldp d14, d15, [x1, #(10*16)]\n"
+        "  ldp x29, x30, [x1, #(5*16)]\n"
+        "  ldp x10, x11, [x1, #(6*16)]\n"
+        "  mov sp, x10\n"
+        "  br x11\n"
+#ifndef __MACH__
+        ".size _mco_switch, .-_mco_switch\n"
+#endif
+    );
+
+    __asm__(
+        ".text\n"
+#ifdef __MACH__
+        ".globl __mco_wrap_main\n"
+        "__mco_wrap_main:\n"
+#else
+        ".globl _mco_wrap_main\n"
+        ".type _mco_wrap_main #function\n"
+        ".hidden _mco_wrap_main\n"
+        "_mco_wrap_main:\n"
+#endif
+        "  mov x0, x19\n"
+        "  mov x30, x21\n"
+        "  br x20\n"
+#ifndef __MACH__
+        ".size _mco_wrap_main, .-_mco_wrap_main\n"
+#endif
+    );
+
+    static void mco_main(mco_coro *co);
+
+    static mco_result mco_makectx(mco_coro *co, mco_ctxbuf *ctx, void *stack_base, std::size_t stack_size)
+    {
+        // On ARM64 stack must be 16-byte aligned.
+        std::uintptr_t base_addr = reinterpret_cast<std::uintptr_t>(stack_base);
+        std::uintptr_t high_addr = base_addr + stack_size;
+
+        ctx->x[0] = static_cast<void *>(co);                      // x19: coroutine pointer
+        ctx->x[1] = reinterpret_cast<void *>(mco_main);           // x20: jump target (mco_main)
+        ctx->x[2] = reinterpret_cast<void *>(0xdeaddeaddeaddead); // x21: dummy return address (lr)
+
+        ctx->sp = reinterpret_cast<void *>(high_addr);
+        ctx->lr = reinterpret_cast<void *>(_mco_wrap_main); // initial return address
+
+        return mco_result::success;
+    }
+
+#else
+#error "Only x86_64 and ARM64 Linux/macOS supported in this stripped version."
 #endif
 
     static void mco_main(mco_coro *co)
