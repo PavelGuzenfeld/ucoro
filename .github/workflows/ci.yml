@@ -65,7 +65,11 @@ jobs:
         run: ${{ matrix.install_cmd }}
         shell: bash
 
-      - name: Configure CMake
+      - name: Configure CMake (Unix)
+        if: runner.os != 'Windows'
+        env:
+          CC: ${{ matrix.cc }}
+          CXX: ${{ matrix.cxx }}
         run: |
           cmake -B build -G "Ninja" -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_CXX_FLAGS="${{ matrix.cxxflags }}" \
@@ -73,18 +77,12 @@ jobs:
             -DUCRO_BUILD_TESTS=ON \
             -DUCRO_BUILD_EXAMPLES=ON \
             -DUCRO_BUILD_BENCHMARKS=ON
-        env:
-          CC: ${{ matrix.cc }}
-          CXX: ${{ matrix.cxx }}
-        if: runner.os != 'Windows'
 
       - name: Configure CMake (Windows)
-        run: |
-          cmake -B build -DCMAKE_BUILD_TYPE=Release ^
-            -DUCRO_BUILD_TESTS=ON ^
-            -DUCRO_BUILD_EXAMPLES=ON ^
-            -DUCRO_BUILD_BENCHMARKS=ON
         if: runner.os == 'Windows'
+        shell: bash
+        # Flattened to single line to prevent YAML syntax errors with line continuations
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DUCRO_BUILD_TESTS=ON -DUCRO_BUILD_EXAMPLES=ON -DUCRO_BUILD_BENCHMARKS=ON
 
       - name: Build
         run: cmake --build build --config Release
@@ -101,111 +99,5 @@ jobs:
       - name: Run Benchmarks (Windows)
         if: runner.os == 'Windows'
         working-directory: build
-        run: .\Release\benchmark_ucoro.exe || truename: CI
-
-on:
-  push:
-    branches: [ "main", "master" ]
-  pull_request:
-    branches: [ "main", "master" ]
-
-jobs:
-  build:
-    name: ${{ matrix.os }} - ${{ matrix.compiler }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          # Linux: GCC 13 (Using PPA for newer libstdc++)
-          - os: ubuntu-22.04
-            compiler: gcc-13
-            install_cmd: |
-              sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
-              sudo apt-get update
-              sudo apt-get install -y gcc-13 g++-13 cmake ninja-build
-            cc: gcc-13
-            cxx: g++-13
-            cxxflags: ""
-            ldflags: ""
-
-          # Linux: Clang 18 (Using LLVM libc++ for full C++23 support)
-          - os: ubuntu-22.04
-            compiler: clang-18
-            install_cmd: |
-              wget https://apt.llvm.org/llvm.sh
-              chmod +x llvm.sh
-              sudo ./llvm.sh 18
-              # Install libc++ to get <expected> and C++23 features
-              sudo apt-get install -y cmake ninja-build libc++-18-dev libc++abi-18-dev
-            cc: clang-18
-            cxx: clang++-18
-            # Force Clang to use libc++ instead of the old system libstdc++
-            cxxflags: "-stdlib=libc++"
-            ldflags: "-stdlib=libc++ -lc++abi"
-
-          # macOS: Apple Clang
-          - os: macos-14
-            compiler: apple-clang
-            install_cmd: brew install cmake ninja
-            cc: clang
-            cxx: clang++
-            cxxflags: ""
-            ldflags: ""
-
-          # Windows: MSVC
-          - os: windows-latest
-            compiler: msvc
-            install_cmd: echo "MSVC is pre-installed"
-            cxxflags: ""
-            ldflags: ""
-
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Install Dependencies
-      if: runner.os != 'Windows'
-      run: ${{ matrix.install_cmd }}
-      shell: bash
-
-    - name: Configure CMake
-      # Build non-Windows using Ninja (and potentially custom flags)
-      run: |
-        cmake -B build -G "Ninja" -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_CXX_FLAGS="${{ matrix.cxxflags }}" \
-          -DCMAKE_EXE_LINKER_FLAGS="${{ matrix.ldflags }}" \
-          -DUCRO_BUILD_TESTS=ON \
-          -DUCRO_BUILD_EXAMPLES=ON \
-          -DUCRO_BUILD_BENCHMARKS=ON
-      env:
-        CC: ${{ matrix.cc }}
-        CXX: ${{ matrix.cxx }}
-      if: runner.os != 'Windows'
-
-    - name: Configure CMake (Windows)
-      # Use bash shell to support '\' line continuation and behave like Linux steps
-      shell: bash
-      run: |
-        cmake -B build -DCMAKE_BUILD_TYPE=Release \
-          -DUCRO_BUILD_TESTS=ON \
-          -DUCRO_BUILD_EXAMPLES=ON \
-          -DUCRO_BUILD_BENCHMARKS=ON
-      if: runner.os == 'Windows'
-
-    - name: Build
-      run: cmake --build build --config Release
-
-    - name: Run Tests
-      working-directory: build
-      run: ctest --output-on-failure -C Release
-
-    - name: Run Benchmarks (Unix)
-      if: runner.os != 'Windows'
-      working-directory: build
-      run: ./benchmark_ucoro || true
-
-    - name: Run Benchmarks (Windows)
-      if: runner.os == 'Windows'
-      working-directory: build
-      # PowerShell syntax for running executables
-      run: .\Release\benchmark_ucoro.exe || true
+        # PowerShell syntax for running executables
+        run: .\Release\benchmark_ucoro.exe || true
