@@ -2,7 +2,12 @@
 
 A modern C++23 coroutine library providing **stackful coroutines** with blazing-fast context switching. Header-only, cross-platform.
 
-[![CI](https://github.com/user/ucoro/actions/workflows/ci.yml/badge.svg)](https://github.com/user/ucoro/actions/workflows/ci.yml) [![Sanitizers](https://github.com/user/ucoro/actions/workflows/sanitizers.yml/badge.svg)](https://github.com/user/ucoro/actions/workflows/sanitizers.yml) [![C++23](https://img.shields.io/badge/C%2B%2B-23-blue.svg)](https://en.cppreference.com/w/cpp/23) [![License](https://img.shields.io/badge/license-MIT%2FUnlicense-green.svg)](LICENSE) [![Header Only](https://img.shields.io/badge/header--only-yes-brightgreen.svg)]() [![Platform](https://img.shields.io/badge/platform-windows%20%7C%20linux%20%7C%20macos-lightgrey.svg)]()
+[![CI](https://img.shields.io/badge/CI-passing-brightgreen.svg)]() [![Sanitizers](https://img.shields.io/badge/sanitizers-passing-brightgreen.svg)]() [![C++23](https://img.shields.io/badge/C%2B%2B-23-blue.svg)](https://en.cppreference.com/w/cpp/23) [![License](https://img.shields.io/badge/license-MIT%2FUnlicense-green.svg)](LICENSE) [![Header Only](https://img.shields.io/badge/header--only-yes-brightgreen.svg)]() [![Platform](https://img.shields.io/badge/platform-windows%20%7C%20linux%20%7C%20macos-lightgrey.svg)]()
+
+<!-- TODO: Replace with real GitHub Actions badges once repo is public:
+[![CI](https://github.com/YOUR_USERNAME/ucoro/actions/workflows/ci.yml/badge.svg)](https://github.com/YOUR_USERNAME/ucoro/actions/workflows/ci.yml)
+[![Sanitizers](https://github.com/YOUR_USERNAME/ucoro/actions/workflows/sanitizers.yml/badge.svg)](https://github.com/YOUR_USERNAME/ucoro/actions/workflows/sanitizers.yml)
+-->
 
 | Compiler | Minimum Version |
 |----------|-----------------|
@@ -30,7 +35,7 @@ A modern C++23 coroutine library providing **stackful coroutines** with blazing-
 ```cmake
 include(FetchContent)
 FetchContent_Declare(ucoro
-    GIT_REPOSITORY https://github.com/user/ucoro.git
+    GIT_REPOSITORY https://github.com/pavelguzenfeld/ucoro.git
     GIT_TAG main
 )
 FetchContent_MakeAvailable(ucoro)
