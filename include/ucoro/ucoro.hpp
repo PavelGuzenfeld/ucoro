@@ -523,9 +523,7 @@ namespace coro
             if (storage.value != default_storage_size.value)
             {
                 desc.storage_size = storage.value;
-                auto const align16 = [](std::size_t addr)
-                { return (addr + 15UL) & ~15UL; };
-                desc.coro_size = align16(sizeof(std::uintptr_t) * 17) + align16(128) + align16(storage.value) + stack.value + 16UL;
+                detail::mco_init_desc_sizes(&desc, stack.value);
             }
 
             detail::mco_coro *co = nullptr;
