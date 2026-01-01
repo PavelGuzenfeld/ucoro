@@ -3,6 +3,11 @@
 //
 // compile with: g++ -std=c++23 -O3 -I../include -I../src -o benchmark_ucoro benchmark_ucoro.cpp
 
+// macOS requires _XOPEN_SOURCE to expose deprecated ucontext functions
+#if defined(__APPLE__)
+#define _XOPEN_SOURCE 600
+#endif
+
 #define UCORO_IMPL
 #include "ucoro/ucoro.hpp"
 
@@ -93,17 +98,17 @@ public:
 
     static void print_result(result const &r)
     {
-        fmt::print("┌─────────────────────────────────────────────────────────────");
-        fmt::print("│ {}", r.name);
-        fmt::print("├─────────────────────────────────────────────────────────────");
-        fmt::print("│ iterations:   {:15}", r.iterations);
-        fmt::print("│ total time:   {:15.3f} ms", std::chrono::duration<double, std::milli>(r.total_time).count());
-        fmt::print("│ mean time:    {:15.1f} ns", static_cast<double>(r.mean_time.count()));
-        fmt::print("│ median time:  {:15.1f} ns", static_cast<double>(r.median_time.count()));
-        fmt::print("│ min time:     {:15.1f} ns", static_cast<double>(r.min_time.count()));
-        fmt::print("│ max time:     {:15.1f} ns", static_cast<double>(r.max_time.count()));
-        fmt::print("│ ops/sec:      {:15.0f}", r.ops_per_second);
-        fmt::print("└─────────────────────────────────────────────────────────────\n");
+        fmt::println("┌─────────────────────────────────────────────────────────────");
+        fmt::println("│ {}", r.name);
+        fmt::println("├─────────────────────────────────────────────────────────────");
+        fmt::println("│ iterations:   {:15}", r.iterations);
+        fmt::println("│ total time:   {:15.3f} ms", std::chrono::duration<double, std::milli>(r.total_time).count());
+        fmt::println("│ mean time:    {:15.1f} ns", static_cast<double>(r.mean_time.count()));
+        fmt::println("│ median time:  {:15.1f} ns", static_cast<double>(r.median_time.count()));
+        fmt::println("│ min time:     {:15.1f} ns", static_cast<double>(r.min_time.count()));
+        fmt::println("│ max time:     {:15.1f} ns", static_cast<double>(r.max_time.count()));
+        fmt::println("│ ops/sec:      {:15.0f}", r.ops_per_second);
+        fmt::println("└─────────────────────────────────────────────────────────────\n");
     }
 };
 
@@ -233,7 +238,7 @@ void bench_context_switch()
         benchmark::print_result(result_uctx);
     }
 #else
-    fmt::print("Skipping ucontext benchmark (not supported/enabled)");
+    fmt::println("Skipping ucontext benchmark (not supported/enabled)");
 #endif
 
     // 4. Boost.Context
@@ -256,7 +261,7 @@ void bench_context_switch()
         benchmark::print_result(result_boost);
     }
 #else
-    fmt::print("Skipping Boost.Context benchmark (library not found)");
+    fmt::println("Skipping Boost.Context benchmark (library not found)");
 #endif
 }
 
@@ -331,7 +336,7 @@ void bench_generator_iteration()
 
     if (!gen_result)
     {
-        fmt::print(stderr, "failed to create generator for iteration benchmark");
+        fmt::println(stderr, "failed to create generator for iteration benchmark");
         return;
     }
 
@@ -344,26 +349,26 @@ void bench_generator_iteration()
 
 void bench_memory_overhead()
 {
-    fmt::print("┌─────────────────────────────────────────────────────────────");
-    fmt::print("│ memory overhead analysis");
-    fmt::print("├─────────────────────────────────────────────────────────────");
-    fmt::print("│ sizeof(mco_coro):          {:6} bytes", sizeof(coro::detail::mco_coro));
-    fmt::print("│ sizeof(coro::coroutine):   {:6} bytes", sizeof(coro::coroutine));
-    fmt::print("│ sizeof(coroutine_handle):  {:6} bytes", sizeof(coro::coroutine_handle));
-    fmt::print("│ sizeof(coro::error):       {:6} bytes", sizeof(coro::error));
-    fmt::print("│ sizeof(coro::state):       {:6} bytes", sizeof(coro::state));
-    fmt::print("│ sizeof(coro::stack_size):  {:6} bytes", sizeof(coro::stack_size));
-    fmt::print("│ sizeof(coro::task_runner): {:6} bytes", sizeof(coro::task_runner));
-    fmt::print("│ default stack size:        {:6} bytes", coro::default_stack_size.value);
-    fmt::print("│ default storage size:      {:6} bytes", coro::default_storage_size.value);
-    fmt::print("└─────────────────────────────────────────────────────────────\n");
+    fmt::println("┌─────────────────────────────────────────────────────────────");
+    fmt::println("│ memory overhead analysis");
+    fmt::println("├─────────────────────────────────────────────────────────────");
+    fmt::println("│ sizeof(mco_coro):          {:6} bytes", sizeof(coro::detail::mco_coro));
+    fmt::println("│ sizeof(coro::coroutine):   {:6} bytes", sizeof(coro::coroutine));
+    fmt::println("│ sizeof(coroutine_handle):  {:6} bytes", sizeof(coro::coroutine_handle));
+    fmt::println("│ sizeof(coro::error):       {:6} bytes", sizeof(coro::error));
+    fmt::println("│ sizeof(coro::state):       {:6} bytes", sizeof(coro::state));
+    fmt::println("│ sizeof(coro::stack_size):  {:6} bytes", sizeof(coro::stack_size));
+    fmt::println("│ sizeof(coro::task_runner): {:6} bytes", sizeof(coro::task_runner));
+    fmt::println("│ default stack size:        {:6} bytes", coro::default_stack_size.value);
+    fmt::println("│ default storage size:      {:6} bytes", coro::default_storage_size.value);
+    fmt::println("└─────────────────────────────────────────────────────────────\n");
 }
 
 void bench_allocation_pattern()
 {
-    fmt::print("┌─────────────────────────────────────────────────────────────");
-    fmt::print("│ allocation pattern analysis");
-    fmt::print("├─────────────────────────────────────────────────────────────");
+    fmt::println("┌─────────────────────────────────────────────────────────────");
+    fmt::println("│ allocation pattern analysis");
+    fmt::println("├─────────────────────────────────────────────────────────────");
 
     constexpr std::size_t count = 1000;
     std::vector<coro::coroutine> coroutines;
@@ -389,11 +394,11 @@ void bench_allocation_pattern()
     auto const create_time = std::chrono::duration<double, std::milli>(after_create - start).count();
     auto const destroy_time = std::chrono::duration<double, std::milli>(after_destroy - after_create).count();
 
-    fmt::print("│ created {} coroutines in {:.2f} ms ({:.1f} ns each)",
+    fmt::println("│ created {} coroutines in {:.2f} ms ({:.1f} ns each)",
                  count, create_time, create_time * 1e6 / static_cast<double>(count));
-    fmt::print("│ destroyed {} coroutines in {:.2f} ms ({:.1f} ns each)",
+    fmt::println("│ destroyed {} coroutines in {:.2f} ms ({:.1f} ns each)",
                  count, destroy_time, destroy_time * 1e6 / static_cast<double>(count));
-    fmt::print("└─────────────────────────────────────────────────────────────\n");
+    fmt::println("└─────────────────────────────────────────────────────────────\n");
 }
 
 // ============================================================================
@@ -402,9 +407,9 @@ void bench_allocation_pattern()
 
 int main()
 {
-    fmt::print("═══════════════════════════════════════════════════════════════");
-    fmt::print("              ucoro C++23 wrapper benchmarks                ");
-    fmt::print("═══════════════════════════════════════════════════════════════\n");
+    fmt::println("═══════════════════════════════════════════════════════════════");
+    fmt::println("              ucoro C++23 wrapper benchmarks                ");
+    fmt::println("═══════════════════════════════════════════════════════════════\n");
 
     bench_memory_overhead();
     bench_allocation_pattern();
@@ -413,9 +418,9 @@ int main()
     bench_storage_push_pop();
     bench_generator_iteration();
 
-    fmt::print("═══════════════════════════════════════════════════════════════");
-    fmt::print("                     benchmarks complete                       ");
-    fmt::print("═══════════════════════════════════════════════════════════════");
+    fmt::println("═══════════════════════════════════════════════════════════════");
+    fmt::println("                     benchmarks complete                       ");
+    fmt::println("═══════════════════════════════════════════════════════════════");
 
     return 0;
 }
