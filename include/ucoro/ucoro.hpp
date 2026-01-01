@@ -1066,16 +1066,31 @@ namespace coro::detail
         return mco_result::success;
     }
 
+// Detect ASan
+#if defined(__has_feature)
+#if __has_feature(address_sanitizer)
+#define UCORO_ASAN_ENABLED
+#endif
+#endif
+#if defined(__SANITIZE_ADDRESS__) && !defined(UCORO_ASAN_ENABLED)
+#define UCORO_ASAN_ENABLED
+#endif
+
     mco_result mco_yield(mco_coro *co)
     {
         if (!co)
             return mco_result::invalid_coroutine;
+
+#ifndef UCORO_ASAN_ENABLED
+        // Check for stack overflow if not running under ASan
         volatile std::size_t dummy;
         std::uintptr_t stack_addr = reinterpret_cast<std::uintptr_t>(&dummy);
         std::uintptr_t stack_min = reinterpret_cast<std::uintptr_t>(co->stack_base);
         std::uintptr_t stack_max = stack_min + co->stack_size;
+
         if (co->magic_number != magic_number || stack_addr < stack_min || stack_addr > stack_max)
             return mco_result::stack_overflow;
+#endif
 
         if (co->state != mco_state::running)
             return mco_result::not_running;
