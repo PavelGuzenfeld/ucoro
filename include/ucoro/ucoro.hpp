@@ -739,24 +739,28 @@ namespace coro
 } // namespace coro
 
 // ============================================================================
-// std::format Support
+// std::format Support (Explicit Specialization)
 // ============================================================================
 
 template <>
-struct std::formatter<coro::error> : std::formatter<std::string_view>
+struct std::formatter<coro::error>
 {
+    constexpr auto parse(std::format_parse_context &ctx) { return ctx.begin(); }
+
     auto format(coro::error e, std::format_context &ctx) const
     {
-        return std::formatter<std::string_view>::format(coro::to_string(e), ctx);
+        return std::format_to(ctx.out(), "{}", coro::to_string(e));
     }
 };
 
 template <>
-struct std::formatter<coro::state> : std::formatter<std::string_view>
+struct std::formatter<coro::state>
 {
+    constexpr auto parse(std::format_parse_context &ctx) { return ctx.begin(); }
+
     auto format(coro::state s, std::format_context &ctx) const
     {
-        return std::formatter<std::string_view>::format(coro::to_string(s), ctx);
+        return std::format_to(ctx.out(), "{}", coro::to_string(s));
     }
 };
 
