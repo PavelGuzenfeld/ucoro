@@ -835,9 +835,13 @@ namespace coro::detail
 
 #if UCORO_GUARD_PAGES && (defined(__unix__) || defined(__APPLE__))
 
-    // macOS uses MAP_ANON instead of MAP_ANONYMOUS
-#if defined(__APPLE__) && !defined(MAP_ANONYMOUS)
+    // MAP_ANONYMOUS may be unavailable when _XOPEN_SOURCE restricts symbols
+#if !defined(MAP_ANONYMOUS)
+#if defined(MAP_ANON)
 #define MAP_ANONYMOUS MAP_ANON
+#elif defined(__APPLE__)
+#define MAP_ANONYMOUS 0x1000
+#endif
 #endif
 
     static std::size_t mco_get_page_size()
