@@ -18,6 +18,7 @@ A modern C++23 coroutine library providing **stackful coroutines** with blazing-
 - **Header-only, zero dependencies** - single header, no forced third-party libraries
 - **Exception safe** - exceptions in coroutines are captured, not undefined behavior
 - **Guard pages** - stack overflow triggers SIGSEGV/access violation instead of silent corruption
+- **Single-allocation design** - callable, metadata, storage, and stack in one contiguous block (no extra heap alloc)
 - **Zero-overhead abstractions** - safe API adds minimal overhead vs raw C; unchecked API adds none
 - **Cross-platform** - Windows x64, Linux x64/ARM64, macOS x64/ARM64
 - **Generators** - Python-style generators with range-for support
