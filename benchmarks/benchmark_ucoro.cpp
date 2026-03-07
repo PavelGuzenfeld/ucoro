@@ -8,12 +8,14 @@
 #define _XOPEN_SOURCE 600
 #endif
 
+// include fmt BEFORE ucoro to enable fmt::formatter specializations
+#include <fmt/core.h>
+
 #define UCORO_IMPL
 #include "ucoro/ucoro.hpp"
 
 #include <algorithm>
 #include <chrono>
-#include <fmt/core.h>
 #include <numeric>
 #include <vector>
 

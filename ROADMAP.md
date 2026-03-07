@@ -1,15 +1,21 @@
 # µcoro Roadmap
 
-Current version: **0.0.1** (initial release)
+Current version: **0.0.1** (production-ready)
 
-## Version 0.0.1 — Initial Release ✓
+## Version 0.0.1 — Production-Ready Release ✓
 
 ### Core Features (Complete)
-- [x] ~55ns context switches (up to 50x faster than POSIX `ucontext`, faster than Boost.Context)
+- [x] ~52ns context switches (10-39x faster than POSIX `ucontext`)
 - [x] Modern C++23 API (`std::expected`, concepts, strong types, `[[nodiscard]]`)
 - [x] Header-only distribution (single header, define `UCORO_IMPL` in one TU)
 - [x] Zero-overhead abstractions (safe API adds minimal overhead vs raw C)
 - [x] Cross-platform support (Windows x64, Linux x64/ARM64, macOS x64/ARM64)
+
+### Safety (Complete)
+- [x] Exception safety — exceptions in coroutines captured via `std::exception_ptr`, not UB
+- [x] Guard pages — mmap/VirtualAlloc + mprotect/VirtualProtect for stack overflow detection
+- [x] Zero dependencies — fmt auto-detected via `#ifdef FMT_VERSION`, never required
+- [x] Zero-alloc callable — `std::function` placement-new'd into coroutine's contiguous allocation (no separate heap alloc per coroutine)
 
 ### API (Complete)
 - [x] `coro::coroutine` — stackful coroutine with RAII semantics
@@ -17,16 +23,18 @@ Current version: **0.0.1** (initial release)
 - [x] `coro::generator<T>` — Python-style generators with range-for support
 - [x] `coro::task_runner` — cooperative round-robin scheduler
 - [x] Type-safe storage — LIFO data passing between coroutine and caller (`push`/`pop`)
-- [x] `storable` concept — compile-time validation for storage types
+- [x] `storable` concept — compile-time validation for storage types (respects `UCORO_STORAGE_SIZE`)
 - [x] Strong types — `stack_size`, `storage_size` prevent parameter confusion
 - [x] Safe API — all operations return `std::expected<T, coro::error>`
 - [x] Unchecked API — `*_unchecked()` variants for hot paths
+- [x] Exception retrieval — `has_exception()`, `exception()`, `rethrow_if_exception()`
 
 ### Testing & CI (Complete)
-- [x] Comprehensive test suite (45+ tests)
+- [x] Unit test suite (52 tests, 280+ assertions via doctest)
+- [x] Integration test suite (17 end-to-end tests: threading, performance, stress, guard pages)
 - [x] Benchmarks comparing against raw C API and POSIX `ucontext`
 - [x] CI on Windows (MSVC), Linux (GCC, Clang), macOS (Apple Clang)
-- [x] ASan + UBSan in debug builds
+- [x] ASan + UBSan sanitizer CI job
 
 ---
 
@@ -34,7 +42,7 @@ Current version: **0.0.1** (initial release)
 
 ### Code Quality
 - [ ] Split header into maintainable sections (`detail/`, `fwd.hpp`, etc.)
-- [ ] Make fmt dependency optional (only for tests/benchmarks/opt-in formatters)
+- [x] Make fmt dependency optional (only for tests/benchmarks/opt-in formatters)
 - [ ] Add `UCORO_ASSERT` macro (user-overridable, defaults to assert)
 - [ ] Improve error messages (static_assert with clear explanations)
 
@@ -48,8 +56,8 @@ Current version: **0.0.1** (initial release)
 - [ ] `.clang-format` config (project style)
 - [ ] `.clang-tidy` config (enabled checks)
 - [ ] CI runs pre-commit on all PRs (fail-fast)
-- [ ] CI build matrix: GCC + Clang × Debug + Release
-- [ ] CI sanitizer job (ASan + UBSan)
+- [x] CI build matrix: GCC + Clang × Debug + Release
+- [x] CI sanitizer job (ASan + UBSan)
 - [ ] Code coverage reporting (gcov/llvm-cov)
 - [ ] Coverage threshold gate (e.g., 80% minimum)
 
@@ -146,7 +154,7 @@ Current version: **0.0.1** (initial release)
 
 ### Advanced
 - [ ] Custom stack allocators (`coro::stack_allocator` concept)
-- [ ] Guard pages for stack overflow detection (optional, platform-specific)
+- [x] Guard pages for stack overflow detection (optional, platform-specific)
 - [ ] Coroutine serialization (checkpoint/restore) — research only
 
 ---

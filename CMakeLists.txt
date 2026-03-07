@@ -81,22 +81,30 @@ target_include_directories(ucoro INTERFACE
 
 target_compile_features(ucoro INTERFACE cxx_std_23)
 
-# Link fmt to the library interface so users get it automatically
-target_link_libraries(ucoro INTERFACE fmt::fmt)
+# fmt is NOT an interface dependency — users don't need it
+# It's only used by tests, benchmarks, and examples
 
 # --- Tests ---
 if(UCORO_BUILD_TESTS)
     enable_testing()
     add_executable(test_ucoro tests/test_ucoro.cpp)
-    target_link_libraries(test_ucoro PRIVATE ucoro doctest::doctest)
+    target_link_libraries(test_ucoro PRIVATE ucoro doctest::doctest fmt::fmt)
     target_include_directories(test_ucoro PRIVATE tests)
     add_test(NAME ucoro_tests COMMAND test_ucoro)
+
+    add_executable(test_integration tests/test_integration.cpp)
+    target_link_libraries(test_integration PRIVATE ucoro fmt::fmt)
+    target_include_directories(test_integration PRIVATE tests)
+    if(UNIX)
+        target_compile_options(test_integration PRIVATE -Wno-deprecated-declarations)
+    endif()
+    add_test(NAME ucoro_integration COMMAND test_integration)
 endif()
 
 # --- Benchmarks ---
 if(UCORO_BUILD_BENCHMARKS)
     add_executable(benchmark_ucoro benchmarks/benchmark_ucoro.cpp)
-    target_link_libraries(benchmark_ucoro PRIVATE ucoro)
+    target_link_libraries(benchmark_ucoro PRIVATE ucoro fmt::fmt)
     
     # Fix for MSVC optimization flags
     if(MSVC)
@@ -121,10 +129,10 @@ endif()
 # --- Examples ---
 if(UCORO_BUILD_EXAMPLES)
     add_executable(example_basic examples/basic.cpp)
-    target_link_libraries(example_basic PRIVATE ucoro)
-    
+    target_link_libraries(example_basic PRIVATE ucoro fmt::fmt)
+
     add_executable(example_generator examples/generator.cpp)
-    target_link_libraries(example_generator PRIVATE ucoro)
+    target_link_libraries(example_generator PRIVATE ucoro fmt::fmt)
 endif()
 
 # --- Install ---

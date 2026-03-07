@@ -1,11 +1,12 @@
 // generator.cpp - python-style generator example
 // because yield is the new return
 
+#include <fmt/core.h>
+
 #define UCORO_IMPL
 #include "ucoro/ucoro.hpp"
 
 #include <cmath>
-#include <fmt/core.h>
 
 int main()
 {

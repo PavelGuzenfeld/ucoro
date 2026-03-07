@@ -9,8 +9,10 @@
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <exception>
 #include <expected>
 #include <functional>
 #include <memory>
@@ -20,8 +22,6 @@
 #include <type_traits>
 #include <utility>
 #include <vector>
-
-#include <fmt/core.h> // Replaces <format> and <print>
 
 // ============================================================================
 // Configuration (Externalizable via Build Parameters)
@@ -37,6 +37,16 @@
 
 #ifndef UCORO_STORAGE_SIZE
 #define UCORO_STORAGE_SIZE 1024
+#endif
+
+#ifndef UCORO_GUARD_PAGES
+#if defined(__unix__) || defined(__APPLE__)
+#define UCORO_GUARD_PAGES 1
+#elif defined(_WIN32)
+#define UCORO_GUARD_PAGES 1
+#else
+#define UCORO_GUARD_PAGES 0
+#endif
 #endif
 
 namespace coro
@@ -173,8 +183,10 @@ namespace coro
 }
 
 // ============================================================================
-// fmt Support
+// fmt Support (optional — only active when fmt is included before this header)
 // ============================================================================
+
+#ifdef FMT_VERSION
 
 template <>
 struct fmt::formatter<coro::error>
@@ -198,6 +210,8 @@ struct fmt::formatter<coro::state>
     }
 };
 
+#endif // FMT_VERSION
+
 namespace coro
 {
     namespace detail
@@ -207,20 +221,12 @@ namespace coro
         // ============================================================================
 
         extern thread_local struct mco_coro *mco_current_co;
+        extern thread_local std::exception_ptr mco_last_exception;
 
-        // Default Allocators
-        inline void *mco_alloc(std::size_t size, void *allocator_data)
-        {
-            (void)allocator_data;
-            return std::calloc(1, size);
-        }
-
-        inline void mco_dealloc(void *ptr, std::size_t size, void *allocator_data)
-        {
-            (void)size;
-            (void)allocator_data;
-            std::free(ptr);
-        }
+        // Default allocator — defined in UCORO_IMPL section.
+        // Uses mmap+guard pages when UCORO_GUARD_PAGES is enabled.
+        void *mco_alloc(std::size_t size, void *allocator_data);
+        void mco_dealloc(void *ptr, std::size_t size, void *allocator_data);
 
         struct mco_coro
         {
@@ -237,6 +243,8 @@ namespace coro
             unsigned char *storage;
             std::size_t bytes_stored;
             std::size_t storage_size;
+            void *callable;
+            std::size_t callable_size;
             void *asan_prev_stack;
             void *tsan_prev_fiber;
             void *tsan_fiber;
@@ -251,6 +259,7 @@ namespace coro
             void (*dealloc_cb)(void *ptr, std::size_t size, void *allocator_data) = nullptr;
             void *allocator_data = nullptr;
             std::size_t storage_size = 0;
+            std::size_t callable_size = 0;
             std::size_t coro_size = 0;
             std::size_t stack_size = 0;
         };
@@ -300,7 +309,7 @@ namespace coro
         };
 
         // ============================================================================
-        // Constexpr Helpers
+        // Helpers
         // ============================================================================
 
         [[nodiscard]] constexpr std::size_t mco_align_forward(std::size_t addr, std::size_t align)
@@ -308,16 +317,17 @@ namespace coro
             return (addr + (align - 1)) & ~(align - 1);
         }
 
-        constexpr void mco_init_desc_sizes(mco_desc *desc, std::size_t stack_size)
+        inline void mco_init_desc_sizes(mco_desc *desc, std::size_t stack_size)
         {
             desc->coro_size = mco_align_forward(sizeof(mco_coro), 16) +
                               mco_align_forward(sizeof(mco_context), 16) +
                               mco_align_forward(desc->storage_size, 16) +
+                              mco_align_forward(desc->callable_size, 16) +
                               stack_size + 16;
             desc->stack_size = stack_size;
         }
 
-        [[nodiscard]] constexpr mco_desc mco_desc_init(void (*func)(mco_coro *co), std::size_t stack_size)
+        [[nodiscard]] inline mco_desc mco_desc_init(void (*func)(mco_coro *co), std::size_t stack_size)
         {
             mco_desc desc{};
 
@@ -387,7 +397,7 @@ namespace coro
     concept coroutine_callable = std::invocable<F>;
 
     template <typename T>
-    concept storable = std::is_trivially_copyable_v<T> && std::is_standard_layout_v<T> && (sizeof(T) <= 1024);
+    concept storable = std::is_trivially_copyable_v<T> && std::is_standard_layout_v<T> && (sizeof(T) <= UCORO_STORAGE_SIZE);
 
     // ============================================================================
     // Classes
@@ -513,12 +523,8 @@ namespace coro
             if (!func)
                 return std::unexpected{error::invalid_arguments};
 
-            auto *wrapper = new (std::nothrow) function_type{std::move(func)};
-            if (wrapper == nullptr)
-                return std::unexpected{error::out_of_memory};
-
             detail::mco_desc desc = detail::mco_desc_init(&coroutine::entry_point, stack.value);
-            desc.user_data = wrapper;
+            desc.callable_size = sizeof(function_type);
 
             if (storage.value != default_storage_size.value)
             {
@@ -530,10 +536,12 @@ namespace coro
             auto const result = from_impl_result(detail::mco_create(&co, &desc));
 
             if (result != error::success)
-            {
-                delete wrapper;
                 return std::unexpected{result};
-            }
+
+            // Placement-new the callable into the pre-allocated region
+            auto *wrapper = new (co->callable) function_type{std::move(func)};
+            co->user_data = wrapper;
+
             return coroutine{co, wrapper};
         }
 
@@ -541,7 +549,9 @@ namespace coro
         auto operator=(coroutine const &) -> coroutine & = delete;
 
         coroutine(coroutine &&other) noexcept
-            : handle_{std::exchange(other.handle_, nullptr)}, func_wrapper_{std::exchange(other.func_wrapper_, nullptr)} {}
+            : handle_{std::exchange(other.handle_, nullptr)},
+              func_wrapper_{std::exchange(other.func_wrapper_, nullptr)},
+              exception_{std::exchange(other.exception_, std::exception_ptr{})} {}
 
         auto operator=(coroutine &&other) noexcept -> coroutine &
         {
@@ -550,6 +560,7 @@ namespace coro
                 destroy();
                 handle_ = std::exchange(other.handle_, nullptr);
                 func_wrapper_ = std::exchange(other.func_wrapper_, nullptr);
+                exception_ = std::exchange(other.exception_, std::exception_ptr{});
             }
             return *this;
         }
@@ -560,9 +571,15 @@ namespace coro
         {
             if (handle_ == nullptr)
                 return std::unexpected{error::invalid_coroutine};
+            detail::mco_last_exception = nullptr;
             auto const result = from_impl_result(detail::mco_resume(handle_));
             if (result != error::success)
                 return std::unexpected{result};
+            if (detail::mco_last_exception)
+            {
+                exception_ = detail::mco_last_exception;
+                detail::mco_last_exception = nullptr;
+            }
             return {};
         }
 
@@ -601,21 +618,26 @@ namespace coro
         [[nodiscard]] auto bytes_stored() const noexcept -> std::size_t { return handle().bytes_stored(); }
         [[nodiscard]] auto storage_capacity() const noexcept -> std::size_t { return handle().storage_capacity(); }
 
+        [[nodiscard]] auto has_exception() const noexcept -> bool { return exception_ != nullptr; }
+        [[nodiscard]] auto exception() const noexcept -> std::exception_ptr { return exception_; }
+        void rethrow_if_exception() const { if (exception_) std::rethrow_exception(exception_); }
+
     private:
         explicit coroutine(detail::mco_coro *co, function_type *wrapper) noexcept
             : handle_{co}, func_wrapper_{wrapper} {}
 
         void destroy() noexcept
         {
+            // Destruct the callable BEFORE freeing the allocation it lives in
+            if (func_wrapper_ != nullptr)
+            {
+                func_wrapper_->~function_type();
+                func_wrapper_ = nullptr;
+            }
             if (handle_ != nullptr)
             {
                 detail::mco_destroy(handle_);
                 handle_ = nullptr;
-            }
-            if (func_wrapper_ != nullptr)
-            {
-                delete func_wrapper_;
-                func_wrapper_ = nullptr;
             }
         }
 
@@ -630,6 +652,7 @@ namespace coro
 
         detail::mco_coro *handle_{nullptr};
         function_type *func_wrapper_{nullptr};
+        std::exception_ptr exception_;
     };
 
     template <storable T>
@@ -785,9 +808,105 @@ namespace coro
 
 #include <cstdlib> // calloc, free
 
+// Guard page support
+#if UCORO_GUARD_PAGES
+#if defined(__unix__) || defined(__APPLE__)
+#include <sys/mman.h>
+#include <unistd.h>
+#elif defined(_WIN32)
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
+#endif
+
 namespace coro::detail
 {
     thread_local mco_coro *mco_current_co = nullptr;
+    thread_local std::exception_ptr mco_last_exception;
+
+    // ============================================================================
+    // Default Allocator — with optional guard pages
+    // ============================================================================
+
+#if UCORO_GUARD_PAGES && (defined(__unix__) || defined(__APPLE__))
+
+    // MAP_ANONYMOUS may be unavailable when _XOPEN_SOURCE restricts symbols
+#if !defined(MAP_ANONYMOUS)
+#if defined(MAP_ANON)
+#define MAP_ANONYMOUS MAP_ANON
+#elif defined(__APPLE__)
+#define MAP_ANONYMOUS 0x1000
+#endif
+#endif
+
+    static std::size_t mco_get_page_size()
+    {
+        static std::size_t ps = static_cast<std::size_t>(sysconf(_SC_PAGESIZE));
+        return ps;
+    }
+
+    void *mco_alloc(std::size_t size, void *allocator_data)
+    {
+        (void)allocator_data;
+        std::size_t ps = mco_get_page_size();
+        std::size_t alloc_size = mco_align_forward(size, ps);
+        void *ptr = mmap(nullptr, alloc_size, PROT_READ | PROT_WRITE,
+                         MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        return (ptr == MAP_FAILED) ? nullptr : ptr;
+    }
+
+    void mco_dealloc(void *ptr, std::size_t size, void *allocator_data)
+    {
+        (void)allocator_data;
+        std::size_t ps = mco_get_page_size();
+        munmap(ptr, mco_align_forward(size, ps));
+    }
+
+#elif UCORO_GUARD_PAGES && defined(_WIN32)
+
+    static std::size_t mco_get_page_size()
+    {
+        SYSTEM_INFO si;
+        GetSystemInfo(&si);
+        return static_cast<std::size_t>(si.dwPageSize);
+    }
+
+    void *mco_alloc(std::size_t size, void *allocator_data)
+    {
+        (void)allocator_data;
+        std::size_t ps = mco_get_page_size();
+        std::size_t alloc_size = mco_align_forward(size, ps);
+        return VirtualAlloc(nullptr, alloc_size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+    }
+
+    void mco_dealloc(void *ptr, std::size_t size, void *allocator_data)
+    {
+        (void)size;
+        (void)allocator_data;
+        VirtualFree(ptr, 0, MEM_RELEASE);
+    }
+
+#else // No guard pages
+
+    void *mco_alloc(std::size_t size, void *allocator_data)
+    {
+        (void)allocator_data;
+        return std::calloc(1, size);
+    }
+
+    void mco_dealloc(void *ptr, std::size_t size, void *allocator_data)
+    {
+        (void)size;
+        (void)allocator_data;
+        std::free(ptr);
+    }
+
+#endif // UCORO_GUARD_PAGES
 
 #if defined(_WIN32) && (defined(_M_X64) || defined(__x86_64__))
 // -----------------------------------------------------------------------------------------
@@ -1341,7 +1460,16 @@ namespace coro::detail
 
     static void mco_main(mco_coro *co)
     {
-        co->func(co);
+        try
+        {
+            co->func(co);
+        }
+        catch (...)
+        {
+            // Exceptions cannot propagate across assembly context switch boundaries.
+            // Store for retrieval by the caller via coroutine::has_exception().
+            mco_last_exception = std::current_exception();
+        }
         co->state = mco_state::dead;
         mco_context *context = static_cast<mco_context *>(co->context);
         mco_prepare_jumpout(co);
@@ -1367,7 +1495,8 @@ namespace coro::detail
         std::uintptr_t co_addr = reinterpret_cast<std::uintptr_t>(co);
         std::uintptr_t context_addr = mco_align_forward(co_addr + sizeof(mco_coro), 16);
         std::uintptr_t storage_addr = mco_align_forward(context_addr + sizeof(mco_context), 16);
-        std::uintptr_t stack_addr = mco_align_forward(storage_addr + desc->storage_size, 16);
+        std::uintptr_t callable_addr = mco_align_forward(storage_addr + desc->storage_size, 16);
+        std::uintptr_t stack_addr = mco_align_forward(callable_addr + desc->callable_size, 16);
 
         mco_context *context = reinterpret_cast<mco_context *>(context_addr);
         std::memset(context, 0, sizeof(mco_context));
@@ -1375,6 +1504,29 @@ namespace coro::detail
         unsigned char *storage = reinterpret_cast<unsigned char *>(storage_addr);
         void *stack_base = reinterpret_cast<void *>(stack_addr);
         std::size_t stack_size = desc->stack_size;
+
+#if UCORO_GUARD_PAGES
+        // Set up a guard page between metadata/storage and the usable stack.
+        // Only for the default mmap/VirtualAlloc-backed allocator.
+        if (desc->alloc_cb == mco_alloc)
+        {
+            std::size_t ps = mco_get_page_size();
+            if (stack_size > ps * 2)
+            {
+                // Align stack start to page boundary for mprotect
+                std::uintptr_t guard_addr = mco_align_forward(stack_addr, ps);
+                std::size_t guard_overhead = (guard_addr - stack_addr) + ps;
+#if defined(__unix__) || defined(__APPLE__)
+                mprotect(reinterpret_cast<void *>(guard_addr), ps, PROT_NONE);
+#elif defined(_WIN32)
+                DWORD old_protect;
+                VirtualProtect(reinterpret_cast<void *>(guard_addr), ps, PAGE_NOACCESS, &old_protect);
+#endif
+                stack_base = reinterpret_cast<void *>(guard_addr + ps);
+                stack_size -= guard_overhead;
+            }
+        }
+#endif
 
         mco_result res = mco_makectx(co, &context->ctx, stack_base, stack_size);
         if (res != mco_result::success)
@@ -1385,6 +1537,8 @@ namespace coro::detail
         co->stack_size = stack_size;
         co->storage = storage;
         co->storage_size = desc->storage_size;
+        co->callable = (desc->callable_size > 0) ? reinterpret_cast<void *>(callable_addr) : nullptr;
+        co->callable_size = desc->callable_size;
         return mco_result::success;
     }
 
@@ -1431,6 +1585,15 @@ namespace coro::detail
             *out_co = nullptr;
             return mco_result::invalid_arguments;
         }
+
+#if UCORO_GUARD_PAGES
+        // Inflate allocation to accommodate guard page alignment + guard page
+        if (desc->alloc_cb == mco_alloc)
+        {
+            std::size_t ps = mco_get_page_size();
+            desc->coro_size += ps * 2;
+        }
+#endif
 
         mco_coro *co = static_cast<mco_coro *>(desc->alloc_cb(desc->coro_size, desc->allocator_data));
         if (!co)
