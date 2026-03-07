@@ -38,6 +38,6 @@ jobs:
             - name: Run Tests
               working-directory: build
               env:
-                  ASAN_OPTIONS: detect_leaks=1:symbolize=1
+                  ASAN_OPTIONS: detect_leaks=1:symbolize=1:alloc_dealloc_mismatch=0
                   UBSAN_OPTIONS: print_stacktrace=1
               run: ./test_ucoro

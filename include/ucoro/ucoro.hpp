@@ -817,6 +817,9 @@ namespace coro
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <windows.h>
 #endif
 #endif
@@ -831,6 +834,11 @@ namespace coro::detail
     // ============================================================================
 
 #if UCORO_GUARD_PAGES && (defined(__unix__) || defined(__APPLE__))
+
+    // macOS uses MAP_ANON instead of MAP_ANONYMOUS
+#if defined(__APPLE__) && !defined(MAP_ANONYMOUS)
+#define MAP_ANONYMOUS MAP_ANON
+#endif
 
     static std::size_t mco_get_page_size()
     {
