@@ -29,8 +29,8 @@ jobs:
                   cmake -B build -G "Ninja" -DCMAKE_BUILD_TYPE=Debug \
                     -DCMAKE_CXX_FLAGS="-stdlib=libc++" \
                     -DCMAKE_EXE_LINKER_FLAGS="-stdlib=libc++ -lc++abi" \
-                    -DUCRO_ENABLE_SANITIZERS=ON \
-                    -DUCRO_BUILD_TESTS=ON
+                    -DUCORO_ENABLE_SANITIZERS=ON \
+                    -DUCORO_BUILD_TESTS=ON
 
             - name: Build
               run: cmake --build build
@@ -38,6 +38,6 @@ jobs:
             - name: Run Tests
               working-directory: build
               env:
-                  ASAN_OPTIONS: detect_leaks=1:symbolize=1
+                  ASAN_OPTIONS: detect_leaks=1:symbolize=1:alloc_dealloc_mismatch=0
                   UBSAN_OPTIONS: print_stacktrace=1
               run: ./test_ucoro

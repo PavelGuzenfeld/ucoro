@@ -1,11 +1,12 @@
 // basic.cpp - basic coroutine usage example
 // the "hello world" of coroutines, if hello world involved context switching
 
+#include <fmt/core.h>
+
 #define UCORO_IMPL
 #include "ucoro/ucoro.hpp"
 
 #include <cstdio> // for stderr
-#include <fmt/core.h>
 
 int main()
 {

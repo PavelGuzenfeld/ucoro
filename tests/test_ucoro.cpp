@@ -6,13 +6,15 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include <doctest/doctest.h>
 
+// include fmt BEFORE ucoro to enable fmt::formatter specializations
+#include <fmt/core.h>
+
 // define implementation before including the wrapper
 #define UCORO_IMPL
 #include "ucoro/ucoro.hpp"
 
 #include <array>
 #include <atomic>
-#include <fmt/core.h>
 #include <numeric>
 #include <string>
 #include <thread>
@@ -882,6 +884,74 @@ TEST_SUITE("edge cases")
         {
             CHECK(received.values[i] == static_cast<int>(i));
         }
+    }
+}
+
+// ============================================================================
+// concepts tests
+// ============================================================================
+
+// ============================================================================
+// exception safety tests
+// ============================================================================
+
+TEST_SUITE("exception safety")
+{
+    TEST_CASE("exception in coroutine is captured")
+    {
+        auto result = coro::coroutine::create([](coro::coroutine_handle)
+                                              { throw std::runtime_error("test error"); });
+
+        REQUIRE(result.has_value());
+        auto &coro = *result;
+
+        auto resume_result = coro.resume();
+        CHECK(resume_result.has_value()); // resume itself succeeds
+        CHECK(coro.done());
+        CHECK(coro.has_exception());
+
+        bool caught = false;
+        try
+        {
+            coro.rethrow_if_exception();
+        }
+        catch (std::runtime_error const &e)
+        {
+            caught = true;
+            CHECK(std::string_view{e.what()} == "test error");
+        }
+        CHECK(caught);
+    }
+
+    TEST_CASE("exception after yield is captured")
+    {
+        int step = 0;
+        auto result = coro::coroutine::create([&step](coro::coroutine_handle h)
+                                              {
+            step = 1;
+            [[maybe_unused]] auto _ = h.yield();
+            step = 2;
+            throw std::logic_error("after yield"); });
+
+        REQUIRE(result.has_value());
+        auto &coro = *result;
+
+        (void)coro.resume();
+        CHECK(step == 1);
+        CHECK_FALSE(coro.has_exception());
+
+        (void)coro.resume();
+        CHECK(step == 2);
+        CHECK(coro.done());
+        CHECK(coro.has_exception());
+    }
+
+    TEST_CASE("no exception means has_exception is false")
+    {
+        auto result = coro::coroutine::create([](coro::coroutine_handle) {});
+        REQUIRE(result.has_value());
+        (void)result->resume();
+        CHECK_FALSE(result->has_exception());
     }
 }
 
