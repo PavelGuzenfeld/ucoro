@@ -46,3 +46,4 @@ install/
 
 #logs
 log*/
+.cache/
