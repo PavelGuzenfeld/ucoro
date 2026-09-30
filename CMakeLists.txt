@@ -5,9 +5,6 @@ project(ucoro
     LANGUAGES CXX
 )
 
-# --- Fix for CMake 3.30+ ---
-# Dependencies like doctest use older cmake_minimum_required (e.g. 3.0).
-# CMake 3.30+ errors on versions < 3.5. This variable forces the minimum to 3.5.
 set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
 
 option(UCORO_BUILD_TESTS "Build tests" ON)
@@ -20,7 +17,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# Enable Link Time Optimization (LTO)
 include(CheckIPOSupported)
 check_ipo_supported(RESULT result OUTPUT output)
 if(result)
@@ -46,10 +42,8 @@ if(UCORO_ENABLE_SANITIZERS AND CMAKE_BUILD_TYPE STREQUAL "Debug")
     endif()
 endif()
 
-# --- Dependencies ---
 include(FetchContent)
 
-# 1. fmt (Replacement for <print> and <format>)
 FetchContent_Declare(
     fmt
     GIT_REPOSITORY https://github.com/fmtlib/fmt.git
@@ -57,7 +51,6 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(fmt)
 
-# 2. doctest (For testing)
 if(UCORO_BUILD_TESTS)
     FetchContent_Declare(
         doctest
@@ -67,10 +60,8 @@ if(UCORO_BUILD_TESTS)
     FetchContent_MakeAvailable(doctest)
 endif()
 
-# 3. Boost (Optional, for benchmarks)
 find_package(Boost COMPONENTS context QUIET)
 
-# --- Library Target ---
 add_library(ucoro INTERFACE)
 add_library(ucoro::ucoro ALIAS ucoro)
 
@@ -81,10 +72,6 @@ target_include_directories(ucoro INTERFACE
 
 target_compile_features(ucoro INTERFACE cxx_std_23)
 
-# fmt is NOT an interface dependency — users don't need it
-# It's only used by tests, benchmarks, and examples
-
-# --- Tests ---
 if(UCORO_BUILD_TESTS)
     enable_testing()
     add_executable(test_ucoro tests/test_ucoro.cpp)
@@ -101,12 +88,10 @@ if(UCORO_BUILD_TESTS)
     add_test(NAME ucoro_integration COMMAND test_integration)
 endif()
 
-# --- Benchmarks ---
 if(UCORO_BUILD_BENCHMARKS)
     add_executable(benchmark_ucoro benchmarks/benchmark_ucoro.cpp)
     target_link_libraries(benchmark_ucoro PRIVATE ucoro fmt::fmt)
     
-    # Fix for MSVC optimization flags
     if(MSVC)
         target_compile_options(benchmark_ucoro PRIVATE $<$<CONFIG:Release>:/O2> $<$<CONFIG:Debug>:/Od>)
     else()
@@ -126,7 +111,6 @@ if(UCORO_BUILD_BENCHMARKS)
     endif()
 endif()
 
-# --- Examples ---
 if(UCORO_BUILD_EXAMPLES)
     add_executable(example_basic examples/basic.cpp)
     target_link_libraries(example_basic PRIVATE ucoro fmt::fmt)
@@ -135,7 +119,6 @@ if(UCORO_BUILD_EXAMPLES)
     target_link_libraries(example_generator PRIVATE ucoro fmt::fmt)
 endif()
 
-# --- Install ---
 include(GNUInstallDirs)
 
 install(TARGETS ucoro

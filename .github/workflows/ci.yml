@@ -14,7 +14,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Linux: GCC 13 (Using PPA for newer libstdc++)
           - os: ubuntu-22.04
             compiler: gcc-13
             install_cmd: |
@@ -26,22 +25,18 @@ jobs:
             cxxflags: ""
             ldflags: ""
 
-          # Linux: Clang 18 (Using LLVM libc++ for full C++23 support)
           - os: ubuntu-22.04
             compiler: clang-18
             install_cmd: |
               wget https://apt.llvm.org/llvm.sh
               chmod +x llvm.sh
               sudo ./llvm.sh 18
-              # Install libc++ to get <expected> and C++23 features
               sudo apt-get install -y cmake ninja-build libc++-18-dev libc++abi-18-dev
             cc: clang-18
             cxx: clang++-18
-            # Force Clang to use libc++ instead of the old system libstdc++
             cxxflags: "-stdlib=libc++"
             ldflags: "-stdlib=libc++ -lc++abi"
 
-          # macOS: Apple Clang
           - os: macos-14
             compiler: apple-clang
             install_cmd: brew install cmake ninja
@@ -50,7 +45,6 @@ jobs:
             cxxflags: ""
             ldflags: ""
 
-          # Windows: MSVC
           - os: windows-latest
             compiler: msvc
             install_cmd: echo "MSVC is pre-installed"
@@ -81,7 +75,6 @@ jobs:
       - name: Configure CMake (Windows)
         if: runner.os == 'Windows'
         shell: bash
-        # Flattened to single line to prevent YAML syntax errors with line continuations
         run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DUCORO_BUILD_TESTS=ON -DUCORO_BUILD_EXAMPLES=ON -DUCORO_BUILD_BENCHMARKS=ON
 
       - name: Build
@@ -99,5 +92,4 @@ jobs:
       - name: Run Benchmarks (Windows)
         if: runner.os == 'Windows'
         working-directory: build
-        # PowerShell syntax for running executables
         run: .\Release\benchmark_ucoro.exe || true

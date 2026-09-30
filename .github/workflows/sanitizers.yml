@@ -18,7 +18,6 @@ jobs:
                   wget https://apt.llvm.org/llvm.sh
                   chmod +x llvm.sh
                   sudo ./llvm.sh 18
-                  # Install libc++ for C++23 support
                   sudo apt-get install -y cmake ninja-build libc++-18-dev libc++abi-18-dev
 
             - name: Configure

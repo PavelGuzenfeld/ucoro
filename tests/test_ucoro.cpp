@@ -1,15 +1,8 @@
-// test_ucoro.cpp - tests for the C++23 ucoro wrapper
-// using doctest because gtest is bloated and catch2 compiles like a drunk turtle
-//
-// compile with: g++ -std=c++23 -I../include -I../src -o test_ucoro test_ucoro.cpp
-
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include <doctest/doctest.h>
 
-// include fmt BEFORE ucoro to enable fmt::formatter specializations
 #include <fmt/core.h>
 
-// define implementation before including the wrapper
 #define UCORO_IMPL
 #include "ucoro/ucoro.hpp"
 
@@ -19,10 +12,6 @@
 #include <string>
 #include <thread>
 #include <vector>
-
-// ============================================================================
-// error enum tests
-// ============================================================================
 
 TEST_SUITE("error enum")
 {
@@ -50,10 +39,6 @@ TEST_SUITE("error enum")
     }
 }
 
-// ============================================================================
-// state enum tests
-// ============================================================================
-
 TEST_SUITE("state enum")
 {
     TEST_CASE("to_string returns correct values")
@@ -71,10 +56,6 @@ TEST_SUITE("state enum")
     }
 }
 
-// ============================================================================
-// strong type tests
-// ============================================================================
-
 TEST_SUITE("strong types")
 {
     TEST_CASE("stack_size holds correct value")
@@ -91,16 +72,11 @@ TEST_SUITE("strong types")
 
     TEST_CASE("default values are sensible")
     {
-        // These rely on the definitions in ucoro.hpp
         CHECK(coro::default_stack_size.value >= 32768UL);
         CHECK(coro::default_storage_size.value == 1024UL);
         CHECK(coro::min_stack_size.value == 32768UL);
     }
 }
-
-// ============================================================================
-// coroutine_handle tests
-// ============================================================================
 
 TEST_SUITE("coroutine_handle")
 {
@@ -120,10 +96,6 @@ TEST_SUITE("coroutine_handle")
         CHECK(result.error() == coro::error::invalid_coroutine);
     }
 }
-
-// ============================================================================
-// coroutine tests
-// ============================================================================
 
 TEST_SUITE("coroutine")
 {
@@ -228,7 +200,7 @@ TEST_SUITE("coroutine")
 
         auto coro2 = std::move(coro1);
         CHECK(coro2.valid());
-        CHECK_FALSE(coro1.valid()); // moved-from state
+        CHECK_FALSE(coro1.valid());
     }
 
     TEST_CASE("move assignment transfers ownership")
@@ -252,7 +224,7 @@ TEST_SUITE("coroutine")
         REQUIRE(result.has_value());
 
         auto coro1 = std::move(*result);
-        auto coro2 = std::move(coro1); // coro1 is now invalid
+        auto coro2 = std::move(coro1);
 
         auto resume_result = coro1.resume();
         CHECK_FALSE(resume_result.has_value());
@@ -277,10 +249,6 @@ TEST_SUITE("coroutine")
         CHECK(result->storage_capacity() == 2048);
     }
 }
-
-// ============================================================================
-// storage tests
-// ============================================================================
 
 TEST_SUITE("storage")
 {
@@ -338,7 +306,6 @@ TEST_SUITE("storage")
     {
         auto result = coro::coroutine::create([](coro::coroutine_handle h)
                                               {
-            // peek twice, pop once
             auto peek1 = h.peek<int>();
             auto peek2 = h.peek<int>();
             auto pop1 = h.pop<int>();
@@ -389,7 +356,6 @@ TEST_SUITE("storage")
 
     TEST_CASE("multiple values LIFO order")
     {
-        // storage is LIFO (stack)
         auto result = coro::coroutine::create([](coro::coroutine_handle h)
                                               {
             auto v3 = h.pop<int>();
@@ -407,12 +373,10 @@ TEST_SUITE("storage")
         REQUIRE(result.has_value());
         auto &coro = *result;
 
-        // push in order 1, 2, 3
         (void)coro.push(1);
         (void)coro.push(2);
         (void)coro.push(3);
 
-        // pop will be 3, 2, 1 (LIFO)
         (void)coro.resume();
     }
 
@@ -430,12 +394,10 @@ TEST_SUITE("storage")
 
         CHECK(counter == 0);
 
-        // Fast resume
         coro.resume_unchecked();
         CHECK(counter == 1);
         CHECK(coro.suspended());
 
-        // Fast resume again
         coro.resume_unchecked();
         CHECK(counter == 2);
         CHECK(coro.done());
@@ -460,10 +422,6 @@ TEST_SUITE("storage")
         CHECK(value_out == 100);
     }
 }
-
-// ============================================================================
-// multithreading tests
-// ============================================================================
 
 TEST_SUITE("multithreading")
 {
@@ -506,7 +464,6 @@ TEST_SUITE("multithreading")
                       {
             coro::task_runner runner;
             
-            // Add a task that yields
             auto task = coro::coroutine::create([](coro::coroutine_handle h) {
                 (void)h.yield();
             });
@@ -519,10 +476,6 @@ TEST_SUITE("multithreading")
         CHECK(thread_done);
     }
 }
-
-// ============================================================================
-// generator tests
-// ============================================================================
 
 TEST_SUITE("generator")
 {
@@ -577,7 +530,6 @@ TEST_SUITE("generator")
     {
         auto gen_result = coro::generator<int>::create([](coro::coroutine_handle)
                                                        {
-                                                           // yield nothing
                                                        });
 
         REQUIRE(gen_result.has_value());
@@ -585,7 +537,7 @@ TEST_SUITE("generator")
 
         auto next = gen.next();
         CHECK(next.has_value());
-        CHECK_FALSE(next->has_value()); // optional is empty
+        CHECK_FALSE(next->has_value());
         CHECK(gen.done());
     }
 
@@ -613,10 +565,6 @@ TEST_SUITE("generator")
     }
 }
 
-// ============================================================================
-// task_runner tests
-// ============================================================================
-
 TEST_SUITE("task_runner")
 {
     TEST_CASE("run single task")
@@ -642,7 +590,6 @@ TEST_SUITE("task_runner")
         std::vector<int> execution_order;
         coro::task_runner runner;
 
-        // task A yields twice
         auto coro_a = coro::coroutine::create([&execution_order](coro::coroutine_handle h)
                                               {
             execution_order.push_back(1);
@@ -651,7 +598,6 @@ TEST_SUITE("task_runner")
             [[maybe_unused]] auto __ = h.yield();
             execution_order.push_back(5); });
 
-        // task B yields twice
         auto coro_b = coro::coroutine::create([&execution_order](coro::coroutine_handle h)
                                               {
             execution_order.push_back(2);
@@ -669,7 +615,6 @@ TEST_SUITE("task_runner")
         auto run_result = runner.run();
         CHECK(run_result.has_value());
 
-        // round-robin should interleave execution
         CHECK((execution_order == std::vector<int>{1, 2, 3, 4, 5, 6}));
     }
 
@@ -691,7 +636,7 @@ TEST_SUITE("task_runner")
 
         auto step1 = runner.step();
         CHECK(step1.has_value());
-        CHECK(*step1 == true); // still alive
+        CHECK(*step1 == true);
         CHECK(counter == 1);
 
         auto step2 = runner.step();
@@ -701,7 +646,7 @@ TEST_SUITE("task_runner")
 
         auto step3 = runner.step();
         CHECK(step3.has_value());
-        CHECK(*step3 == false); // done
+        CHECK(*step3 == false);
         CHECK(counter == 3);
     }
 
@@ -712,7 +657,7 @@ TEST_SUITE("task_runner")
         CHECK(runner.size() == 0);
 
         auto run_result = runner.run();
-        CHECK(run_result.has_value()); // no error, just nothing to do
+        CHECK(run_result.has_value());
     }
 
     TEST_CASE("tasks finishing at different times")
@@ -720,11 +665,9 @@ TEST_SUITE("task_runner")
         std::vector<std::string> log;
         coro::task_runner runner;
 
-        // short task
         auto short_task = coro::coroutine::create([&log](coro::coroutine_handle)
                                                   { log.push_back("short"); });
 
-        // long task
         auto long_task = coro::coroutine::create([&log](coro::coroutine_handle h)
                                                  {
             log.push_back("long-1");
@@ -741,7 +684,6 @@ TEST_SUITE("task_runner")
 
         (void)runner.run();
 
-        // short task finishes first, long task continues
         CHECK(log.size() == 4);
         CHECK(log[0] == "short");
         CHECK(log[1] == "long-1");
@@ -749,10 +691,6 @@ TEST_SUITE("task_runner")
         CHECK(log[3] == "long-3");
     }
 }
-
-// ============================================================================
-// formatting tests (using fmt)
-// ============================================================================
 
 TEST_SUITE("formatting")
 {
@@ -784,10 +722,6 @@ TEST_SUITE("formatting")
     }
 }
 
-// ============================================================================
-// edge cases
-// ============================================================================
-
 TEST_SUITE("edge cases")
 {
     TEST_CASE("deeply nested yields")
@@ -815,12 +749,9 @@ TEST_SUITE("edge cases")
 
     TEST_CASE("coroutine that throws")
     {
-        // the C library doesn't handle C++ exceptions well, but we should
-        // at least not crash if the coroutine doesn't throw
         bool completed = false;
         auto result = coro::coroutine::create([&completed](coro::coroutine_handle)
                                               {
-            // don't actually throw, just complete normally
             completed = true; });
 
         REQUIRE(result.has_value());
@@ -830,7 +761,6 @@ TEST_SUITE("edge cases")
 
     TEST_CASE("running() outside coroutine")
     {
-        // when not inside a coroutine, running() returns invalid handle
         auto handle = coro::running();
         CHECK_FALSE(handle.valid());
     }
@@ -866,7 +796,7 @@ TEST_SUITE("edge cases")
                 }
             },
             coro::default_stack_size,
-            coro::storage_size{2048} // need more storage for BigData
+            coro::storage_size{2048}
         );
 
         REQUIRE(result.has_value());
@@ -887,14 +817,6 @@ TEST_SUITE("edge cases")
     }
 }
 
-// ============================================================================
-// concepts tests
-// ============================================================================
-
-// ============================================================================
-// exception safety tests
-// ============================================================================
-
 TEST_SUITE("exception safety")
 {
     TEST_CASE("exception in coroutine is captured")
@@ -906,7 +828,7 @@ TEST_SUITE("exception safety")
         auto &coro = *result;
 
         auto resume_result = coro.resume();
-        CHECK(resume_result.has_value()); // resume itself succeeds
+        CHECK(resume_result.has_value());
         CHECK(coro.done());
         CHECK(coro.has_exception());
 
@@ -955,10 +877,6 @@ TEST_SUITE("exception safety")
     }
 }
 
-// ============================================================================
-// concepts tests
-// ============================================================================
-
 TEST_SUITE("concepts")
 {
     TEST_CASE("storable concept accepts trivial types")
@@ -977,10 +895,8 @@ TEST_SUITE("concepts")
 
     TEST_CASE("storable concept rejects non-trivial types")
     {
-        // std::string is not trivially copyable
         static_assert(!coro::storable<std::string>);
 
-        // std::vector is not trivially copyable
         static_assert(!coro::storable<std::vector<int>>);
     }
 
@@ -988,7 +904,7 @@ TEST_SUITE("concepts")
     {
         struct TooBig
         {
-            std::array<char, 2048> data; // > 1024 limit
+            std::array<char, 2048> data;
         };
         static_assert(!coro::storable<TooBig>);
     }

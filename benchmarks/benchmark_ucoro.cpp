@@ -1,14 +1,7 @@
-// benchmark_ucoro.cpp - performance benchmarks for ucoro C++23 wrapper
-// because if you can't measure it, you can't brag about it
-//
-// compile with: g++ -std=c++23 -O3 -I../include -I../src -o benchmark_ucoro benchmark_ucoro.cpp
-
-// macOS requires _XOPEN_SOURCE to expose deprecated ucontext functions
 #if defined(__APPLE__)
 #define _XOPEN_SOURCE 600
 #endif
 
-// include fmt BEFORE ucoro to enable fmt::formatter specializations
 #include <fmt/core.h>
 
 #define UCORO_IMPL
@@ -19,8 +12,6 @@
 #include <numeric>
 #include <vector>
 
-// --- Optional Dependencies ---
-
 #ifdef HAVE_UCONTEXT
 #include <ucontext.h>
 #endif
@@ -28,10 +19,6 @@
 #ifdef HAVE_BOOST_CONTEXT
 #include <boost/context/fiber.hpp>
 #endif
-
-// ============================================================================
-// timing utilities
-// ============================================================================
 
 class benchmark
 {
@@ -60,13 +47,11 @@ public:
         std::vector<duration> times;
         times.reserve(iterations);
 
-        // warmup
         for (std::size_t i = 0; i < std::min(iterations / 10, std::size_t{100}); ++i)
         {
             func();
         }
 
-        // actual benchmark
         for (std::size_t i = 0; i < iterations; ++i)
         {
             auto const start = clock::now();
@@ -75,7 +60,6 @@ public:
             times.push_back(std::chrono::duration_cast<duration>(end - start));
         }
 
-        // calculate statistics
         std::ranges::sort(times);
 
         auto const total = std::accumulate(times.begin(), times.end(), duration{});
@@ -114,10 +98,6 @@ public:
     }
 };
 
-// ============================================================================
-// Raw C Functions (for comparison)
-// ============================================================================
-
 void raw_noop(coro::detail::mco_coro *) {}
 
 void raw_yield_loop(coro::detail::mco_coro *co)
@@ -138,18 +118,12 @@ void raw_storage_loop(coro::detail::mco_coro *co)
     }
 }
 
-// ============================================================================
-// Benchmarks
-// ============================================================================
-
 void bench_create_destroy()
 {
-    // C++ Wrapper
     auto result = benchmark::run("coroutine create + destroy (C++ wrapper)", 100'000, []()
                                  { auto coro = coro::coroutine::create([](coro::coroutine_handle) {}); });
     benchmark::print_result(result);
 
-    // Raw C API
     auto result_raw = benchmark::run("coroutine create + destroy (Raw C API)", 100'000, []()
                                      {
         coro::detail::mco_desc desc = coro::detail::mco_desc_init(raw_noop, 0);
@@ -158,10 +132,6 @@ void bench_create_destroy()
         coro::detail::mco_destroy(co); });
     benchmark::print_result(result_raw);
 }
-
-// ---------------------------------------------------------
-// Context Switch Benchmarks (The Main Event)
-// ---------------------------------------------------------
 
 #ifdef HAVE_UCONTEXT
 ucontext_t uctx_main, uctx_func;
@@ -178,7 +148,6 @@ void ucontext_func()
 
 void bench_context_switch()
 {
-    // 1. ucoro (C++ Wrapper Safe)
     {
         auto coro_result = coro::coroutine::create([](coro::coroutine_handle h)
                                                    {
@@ -195,12 +164,11 @@ void bench_context_switch()
         }
     }
 
-    // 1.5. ucoro (C++ Wrapper UNCHECKED)
     {
         auto coro_result = coro::coroutine::create([](coro::coroutine_handle h)
                                                    {
             while(true) {
-                h.yield_unchecked(); // FAST PATH
+                h.yield_unchecked();
             } });
 
         if (coro_result)
@@ -208,13 +176,12 @@ void bench_context_switch()
             auto &coro = *coro_result;
             auto result = benchmark::run("context switch (ucoro C++ UNCHECKED)", 1'000'000, [&coro]()
                                          {
-                                             coro.resume_unchecked(); // FAST PATH
+                                             coro.resume_unchecked();
                                          });
             benchmark::print_result(result);
         }
     }
 
-    // 2. ucoro (Raw C API)
     {
         coro::detail::mco_desc desc = coro::detail::mco_desc_init(raw_yield_loop, 0);
         coro::detail::mco_coro *raw_co = nullptr;
@@ -226,7 +193,6 @@ void bench_context_switch()
         coro::detail::mco_destroy(raw_co);
     }
 
-    // 3. ucontext (POSIX)
 #ifdef HAVE_UCONTEXT
     {
         getcontext(&uctx_func);
@@ -243,11 +209,9 @@ void bench_context_switch()
     fmt::println("Skipping ucontext benchmark (not supported/enabled)");
 #endif
 
-    // 4. Boost.Context
 #ifdef HAVE_BOOST_CONTEXT
     {
         namespace ctx = boost::context;
-        // fixed-size stack allows fairer comparison to ucoro/ucontext default stacks
         ctx::fiber f = ctx::fiber(std::allocator_arg, ctx::fixedsize_stack(64 * 1024),
                                   [](ctx::fiber &&main)
                                   {
@@ -269,7 +233,6 @@ void bench_context_switch()
 
 void bench_storage_push_pop()
 {
-    // --- C++ Wrapper Setup (Safe) ---
     {
         auto coro_result = coro::coroutine::create([](coro::coroutine_handle h)
                                                    {
@@ -290,7 +253,6 @@ void bench_storage_push_pop()
         }
     }
 
-    // --- C++ Wrapper Setup (Unchecked) ---
     {
         auto coro_result = coro::coroutine::create([](coro::coroutine_handle h)
                                                    {
@@ -311,7 +273,6 @@ void bench_storage_push_pop()
         }
     }
 
-    // --- Raw C API Setup ---
     {
         coro::detail::mco_desc desc = coro::detail::mco_desc_init(raw_storage_loop, 0);
         coro::detail::mco_coro *raw_co = nullptr;
@@ -402,10 +363,6 @@ void bench_allocation_pattern()
                  count, destroy_time, destroy_time * 1e6 / static_cast<double>(count));
     fmt::println("└─────────────────────────────────────────────────────────────\n");
 }
-
-// ============================================================================
-// main
-// ============================================================================
 
 int main()
 {

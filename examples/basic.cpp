@@ -1,18 +1,14 @@
-// basic.cpp - basic coroutine usage example
-// the "hello world" of coroutines, if hello world involved context switching
-
 #include <fmt/core.h>
 
 #define UCORO_IMPL
 #include "ucoro/ucoro.hpp"
 
-#include <cstdio> // for stderr
+#include <cstdio>
 
 int main()
 {
     fmt::print("=== basic coroutine example ===\n");
 
-    // create a simple coroutine that yields a few times
     auto coro_result = coro::coroutine::create([](coro::coroutine_handle h)
                                                {
         fmt::print("coroutine: starting");
@@ -35,7 +31,6 @@ int main()
 
     fmt::print("main: coroutine created, status = {}", coro::to_string(coro.status()));
 
-    // resume until completion
     int step = 1;
     while (!coro.done())
     {
@@ -53,29 +48,23 @@ int main()
 
     fmt::print("\nmain: coroutine completed");
 
-    // demonstrate storage (data passing)
     fmt::print("\n=== data passing example ===\n");
 
     auto data_coro = coro::coroutine::create([](coro::coroutine_handle h)
                                              {
-        // receive data from main
         auto value = h.pop<int>();
         if (value) {
             fmt::print("coroutine: received value = {}", *value);
             
-            // modify and send back
             [[maybe_unused]] auto _ = h.push(*value * 2);
         } });
 
     if (data_coro)
     {
-        // send data to coroutine
         (void)data_coro->push(21);
 
-        // run coroutine
         (void)data_coro->resume();
 
-        // receive result
         auto result = data_coro->pop<int>();
         if (result)
         {

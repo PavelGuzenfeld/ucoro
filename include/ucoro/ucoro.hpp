@@ -1,6 +1,3 @@
-// ucoro.hpp - C++23 wrapper for minicoro
-// Single-header implementation. Define UCORO_IMPL in *one* source file.
-//
 // SPDX-License-Identifier: MIT
 // Original C library: Eduardo Bart (https://github.com/edubart/minicoro)
 
@@ -22,10 +19,6 @@
 #include <type_traits>
 #include <utility>
 #include <vector>
-
-// ============================================================================
-// Configuration (Externalizable via Build Parameters)
-// ============================================================================
 
 #ifndef UCORO_STACK_SIZE
 #define UCORO_STACK_SIZE (56 * 1024)
@@ -96,10 +89,6 @@ namespace coro
     inline constexpr stack_size default_stack_size{UCORO_STACK_SIZE};
     inline constexpr storage_size default_storage_size{UCORO_STORAGE_SIZE};
     inline constexpr stack_size min_stack_size{UCORO_MIN_STACK_SIZE};
-
-    // ============================================================================
-    // Public API Types
-    // ============================================================================
 
     enum class [[nodiscard]] error : std::uint8_t
     {
@@ -182,10 +171,6 @@ namespace coro
     }
 }
 
-// ============================================================================
-// fmt Support (optional — only active when fmt is included before this header)
-// ============================================================================
-
 #ifdef FMT_VERSION
 
 template <>
@@ -210,21 +195,16 @@ struct fmt::formatter<coro::state>
     }
 };
 
-#endif // FMT_VERSION
+#endif
 
 namespace coro
 {
     namespace detail
     {
-        // ============================================================================
-        // Internal Types & Forward Declarations
-        // ============================================================================
 
         extern thread_local struct mco_coro *mco_current_co;
         extern thread_local std::exception_ptr mco_last_exception;
 
-        // Default allocator — defined in UCORO_IMPL section.
-        // Uses mmap+guard pages when UCORO_GUARD_PAGES is enabled.
         void *mco_alloc(std::size_t size, void *allocator_data);
         void mco_dealloc(void *ptr, std::size_t size, void *allocator_data);
 
@@ -264,10 +244,7 @@ namespace coro
             std::size_t stack_size = 0;
         };
 
-        // ------------------- Architecture Detection -------------------
-
 #if defined(_WIN32) && (defined(_M_X64) || defined(__x86_64__))
-        // Windows x64
         struct mco_ctxbuf
         {
             void *rip, *rsp, *rbp, *rbx, *r12, *r13, *r14, *r15, *rdi, *rsi;
@@ -277,11 +254,9 @@ namespace coro
             void *stack_limit;
             void *stack_base;
         };
-        // Function pointers for Windows assembly blobs
         extern void (*_mco_switch)(mco_ctxbuf *from, mco_ctxbuf *to);
 
 #elif defined(__x86_64__) && !defined(_WIN32)
-        // x86_64 Linux/macOS
         struct mco_ctxbuf
         {
             void *rip, *rsp, *rbp, *rbx, *r12, *r13, *r14, *r15;
@@ -289,7 +264,6 @@ namespace coro
         extern "C" void _mco_switch(mco_ctxbuf *from, mco_ctxbuf *to);
 
 #elif defined(__aarch64__) && !defined(_WIN32)
-        // ARM64 Linux/macOS
         struct mco_ctxbuf
         {
             void *x[12]; /* x19-x30 */
@@ -307,10 +281,6 @@ namespace coro
             mco_ctxbuf ctx;
             mco_ctxbuf back_ctx;
         };
-
-        // ============================================================================
-        // Helpers
-        // ============================================================================
 
         [[nodiscard]] constexpr std::size_t mco_align_forward(std::size_t addr, std::size_t align)
         {
@@ -351,10 +321,6 @@ namespace coro
             return desc;
         }
 
-        // ============================================================================
-        // Runtime Inline Helpers
-        // ============================================================================
-
         inline void mco_prepare_jumpin(mco_coro *co)
         {
             mco_coro *prev_co = mco_current_co;
@@ -373,7 +339,6 @@ namespace coro
             mco_current_co = prev_co;
         }
 
-        // Internal API Declarations
         void *mco_get_user_data(mco_coro *co);
         mco_state mco_status(mco_coro *co);
         mco_result mco_resume(mco_coro *co);
@@ -387,21 +352,13 @@ namespace coro
         mco_result mco_destroy(mco_coro *co);
         mco_result mco_create(mco_coro **out_co, mco_desc *desc);
 
-    } // namespace detail
-
-    // ============================================================================
-    // Concepts
-    // ============================================================================
+    }
 
     template <typename F>
     concept coroutine_callable = std::invocable<F>;
 
     template <typename T>
     concept storable = std::is_trivially_copyable_v<T> && std::is_standard_layout_v<T> && (sizeof(T) <= UCORO_STORAGE_SIZE);
-
-    // ============================================================================
-    // Classes
-    // ============================================================================
 
     class coroutine_handle
     {
@@ -538,7 +495,6 @@ namespace coro
             if (result != error::success)
                 return std::unexpected{result};
 
-            // Placement-new the callable into the pre-allocated region
             auto *wrapper = new (co->callable) function_type{std::move(func)};
             co->user_data = wrapper;
 
@@ -628,7 +584,6 @@ namespace coro
 
         void destroy() noexcept
         {
-            // Destruct the callable BEFORE freeing the allocation it lives in
             if (func_wrapper_ != nullptr)
             {
                 func_wrapper_->~function_type();
@@ -798,17 +753,12 @@ namespace coro
     private:
         std::vector<coroutine> tasks_;
     };
-} // namespace coro
-
-// ============================================================================
-// Internal Implementation (minicoro integrated)
-// ============================================================================
+}
 
 #ifdef UCORO_IMPL
 
 #include <cstdlib> // calloc, free
 
-// Guard page support
 #if UCORO_GUARD_PAGES
 #if defined(__unix__) || defined(__APPLE__)
 #include <sys/mman.h>
@@ -829,13 +779,8 @@ namespace coro::detail
     thread_local mco_coro *mco_current_co = nullptr;
     thread_local std::exception_ptr mco_last_exception;
 
-    // ============================================================================
-    // Default Allocator — with optional guard pages
-    // ============================================================================
-
 #if UCORO_GUARD_PAGES && (defined(__unix__) || defined(__APPLE__))
 
-    // MAP_ANONYMOUS may be unavailable when _XOPEN_SOURCE restricts symbols
 #if !defined(MAP_ANONYMOUS)
 #if defined(MAP_ANON)
 #define MAP_ANONYMOUS MAP_ANON
@@ -891,7 +836,7 @@ namespace coro::detail
         VirtualFree(ptr, 0, MEM_RELEASE);
     }
 
-#else // No guard pages
+#else
 
     void *mco_alloc(std::size_t size, void *allocator_data)
     {
@@ -906,12 +851,9 @@ namespace coro::detail
         std::free(ptr);
     }
 
-#endif // UCORO_GUARD_PAGES
+#endif
 
 #if defined(_WIN32) && (defined(_M_X64) || defined(__x86_64__))
-// -----------------------------------------------------------------------------------------
-// Windows x64 Implementation (via raw assembly blobs)
-// -----------------------------------------------------------------------------------------
 #pragma section(".text")
 #define MCO_ASM_BLOB __declspec(allocate(".text"))
 
@@ -1289,9 +1231,6 @@ namespace coro::detail
     }
 
 #elif defined(__x86_64__) && !defined(_WIN32)
-    // -----------------------------------------------------------------------------------------
-    // Linux/macOS x64 Implementation
-    // -----------------------------------------------------------------------------------------
     extern "C" void _mco_wrap_main(void);
 
     __asm__(
@@ -1366,9 +1305,6 @@ namespace coro::detail
     }
 
 #elif defined(__aarch64__) && !defined(_WIN32)
-    // -----------------------------------------------------------------------------------------
-    // Linux/macOS ARM64 Implementation
-    // -----------------------------------------------------------------------------------------
     extern "C" void _mco_wrap_main(void);
 
     __asm__(
@@ -1436,16 +1372,18 @@ namespace coro::detail
 
     static mco_result mco_makectx(mco_coro *co, mco_ctxbuf *ctx, void *stack_base, std::size_t stack_size)
     {
-        // On ARM64 stack must be 16-byte aligned.
         std::uintptr_t base_addr = reinterpret_cast<std::uintptr_t>(stack_base);
         std::uintptr_t high_addr = base_addr + stack_size;
 
-        ctx->x[0] = static_cast<void *>(co);                      // x19: coroutine pointer
-        ctx->x[1] = reinterpret_cast<void *>(mco_main);           // x20: jump target (mco_main)
-        ctx->x[2] = reinterpret_cast<void *>(0xdeaddeaddeaddead); // x21: dummy return address (lr)
+        constexpr std::size_t x19_coroutine = 0;
+        constexpr std::size_t x20_entry = 1;
+        constexpr std::size_t x21_dummy_lr = 2;
+        ctx->x[x19_coroutine] = static_cast<void *>(co);
+        ctx->x[x20_entry] = reinterpret_cast<void *>(mco_main);
+        ctx->x[x21_dummy_lr] = reinterpret_cast<void *>(0xdeaddeaddeaddead);
 
         ctx->sp = reinterpret_cast<void *>(high_addr);
-        ctx->lr = reinterpret_cast<void *>(_mco_wrap_main); // initial return address
+        ctx->lr = reinterpret_cast<void *>(_mco_wrap_main);
 
         return mco_result::success;
     }
@@ -1453,10 +1391,6 @@ namespace coro::detail
 #else
 #error "Only x86_64 and ARM64 Linux/macOS supported in this stripped version."
 #endif
-
-    // -----------------------------------------------------------------------------------------
-    // Common Implementation
-    // -----------------------------------------------------------------------------------------
 
     static void mco_main(mco_coro *co)
     {
@@ -1466,8 +1400,6 @@ namespace coro::detail
         }
         catch (...)
         {
-            // Exceptions cannot propagate across assembly context switch boundaries.
-            // Store for retrieval by the caller via coroutine::has_exception().
             mco_last_exception = std::current_exception();
         }
         co->state = mco_state::dead;
@@ -1506,14 +1438,11 @@ namespace coro::detail
         std::size_t stack_size = desc->stack_size;
 
 #if UCORO_GUARD_PAGES
-        // Set up a guard page between metadata/storage and the usable stack.
-        // Only for the default mmap/VirtualAlloc-backed allocator.
         if (desc->alloc_cb == mco_alloc)
         {
             std::size_t ps = mco_get_page_size();
             if (stack_size > ps * 2)
             {
-                // Align stack start to page boundary for mprotect
                 std::uintptr_t guard_addr = mco_align_forward(stack_addr, ps);
                 std::size_t guard_overhead = (guard_addr - stack_addr) + ps;
 #if defined(__unix__) || defined(__APPLE__)
@@ -1587,7 +1516,6 @@ namespace coro::detail
         }
 
 #if UCORO_GUARD_PAGES
-        // Inflate allocation to accommodate guard page alignment + guard page
         if (desc->alloc_cb == mco_alloc)
         {
             std::size_t ps = mco_get_page_size();
@@ -1637,7 +1565,6 @@ namespace coro::detail
         return mco_result::success;
     }
 
-// Detect ASan
 #if defined(__has_feature)
 #if __has_feature(address_sanitizer)
 #define UCORO_ASAN_ENABLED
@@ -1653,7 +1580,6 @@ namespace coro::detail
             return mco_result::invalid_coroutine;
 
 #ifndef UCORO_ASAN_ENABLED
-        // Check for stack overflow if not running under ASan
         volatile std::size_t dummy;
         std::uintptr_t stack_addr = reinterpret_cast<std::uintptr_t>(&dummy);
         std::uintptr_t stack_min = reinterpret_cast<std::uintptr_t>(co->stack_base);
@@ -1725,6 +1651,6 @@ namespace coro::detail
     std::size_t mco_get_storage_size(mco_coro *co) { return co ? co->storage_size : 0; }
     mco_coro *mco_running(void) { return mco_current_co; }
 
-} // namespace coro::detail
+}
 
-#endif // UCORO_IMPL
+#endif
