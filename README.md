@@ -1,9 +1,9 @@
 # ucoro
 
 <!-- --8<-- [start:about] -->
-A modern C++23 coroutine library providing **stackful coroutines** with blazing-fast context switching. Header-only, zero dependencies, cross-platform.
+Stackful coroutines for C++23 in one header, built on minicoro.
 
-Status: maintenance only. Bug fixes and platform fixes are accepted; the roadmap is on hold.
+Status: maintenance only. Bug fixes and platform fixes are accepted.
 <!-- --8<-- [end:about] -->
 
 [![CI](https://github.com/PavelGuzenfeld/ucoro/actions/workflows/ci.yml/badge.svg)](https://github.com/PavelGuzenfeld/ucoro/actions/workflows/ci.yml) [![Sanitizers](https://github.com/PavelGuzenfeld/ucoro/actions/workflows/sanitizers.yml/badge.svg)](https://github.com/PavelGuzenfeld/ucoro/actions/workflows/sanitizers.yml) [![C++23](https://img.shields.io/badge/C%2B%2B-23-blue.svg)](https://en.cppreference.com/w/cpp/23) [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE) [![Header Only](https://img.shields.io/badge/header--only-yes-brightgreen.svg)]() [![Platform](https://img.shields.io/badge/platform-windows%20%7C%20linux%20%7C%20macos-lightgrey.svg)]()
@@ -18,22 +18,20 @@ Status: maintenance only. Bug fixes and platform fixes are accepted; the roadmap
 ## Features
 
 <!-- --8<-- [start:features] -->
-- **40-100 ns context switches** - 10-39x faster than POSIX `ucontext`; about 2x slower than Boost.Context on Linux x64 (see [Benchmarks](#benchmarks))
-- **Modern C++23 API** - `std::expected`, concepts, strong types, `[[nodiscard]]`
-- **Header-only, zero dependencies** - single header, no forced third-party libraries
+- **40-100 ns context switches** - 10-39x faster than POSIX `ucontext`; about 2x slower than Boost.Context on Linux x64
+- **C++23 API** - `std::expected`, concepts, strong types, `[[nodiscard]]`
+- **Header-only, no dependencies** - one header; fmt formatters only if you include fmt
 - **Exception safe** - exceptions in coroutines are captured, not undefined behavior
 - **Guard pages** - stack overflow triggers SIGSEGV/access violation instead of silent corruption
 - **Single-allocation design** - the `std::function` object, metadata, storage, and stack share one contiguous block; a capture larger than `std::function`'s small buffer still allocates once
-- **Zero-overhead abstractions** - safe API adds minimal overhead vs raw C; unchecked API adds none
+- **Checked and unchecked APIs** - the checked path costs about 3 ns per switch on Linux x64
 - **Cross-platform** - CI-tested on Windows x64, Linux x64 and macOS ARM64; Linux ARM64 and macOS x64 are implemented but not CI-tested
-- **Generators** - Python-style generators with range-for support
+- **Generators** - `generator<T>` works in range-for
 - **Task runner** - cooperative round-robin scheduler
 - **Type-safe storage** - LIFO data passing between coroutine and caller
 - **fmt support** - optional `fmt::formatter` specializations (auto-detected)
 
 <!-- --8<-- [end:features] -->
-
-See the **[Roadmap](ROADMAP.md)** for ideas; the project is maintenance-only.
 
 ## Quick Start
 
@@ -127,7 +125,7 @@ auto coro = coro::coroutine::create([](coro::coroutine_handle h) {
 // Output: received: 42
 ```
 
-### Task Runner (Cooperative Multitasking)
+### Task Runner
 
 ```cpp
 coro::task_runner runner;
@@ -172,7 +170,7 @@ if (coro->has_exception()) {
 
 Without this, exceptions unwinding through assembly context-switch frames would be undefined behavior. ucoro catches them at the boundary and stores them for safe retrieval.
 
-### Unchecked API (Maximum Performance)
+### Unchecked API
 
 For hot paths where you've already validated state:
 
@@ -195,11 +193,11 @@ int result = coro->pop_unchecked<int>(); // 42
 ## Advanced Examples
 
 <!-- --8<-- [start:examples] -->
-These examples demonstrate why you'd choose stackful coroutines over C++20's stackless `co_await`/`co_yield`.
+Cases where a stackful coroutine does what C++20's stackless `co_await`/`co_yield` cannot.
 
-### Deep Yield (Yield From Any Call Depth)
+### Yield From Any Call Depth
 
-C++20 coroutines can only `co_yield` from the coroutine function itself. With stackful coroutines, you can yield from **any call depth** - no need to make every function in the chain async:
+C++20 coroutines can only `co_yield` from the coroutine function itself. A stackful coroutine yields from any call depth, so the functions in between stay ordinary:
 
 ```cpp
 void parse_nested_json(coro::coroutine_handle h, json_node const& node, int depth) {
@@ -223,7 +221,7 @@ while (!json_worker->done()) {
 }
 ```
 
-### Game AI Behavior (State Machines Made Readable)
+### Game AI State Machine
 
 ```cpp
 auto npc_brain = coro::coroutine::create([&](coro::coroutine_handle h) {
@@ -258,7 +256,7 @@ void game_update() {
 
 ### Wrapping Callback-Based APIs
 
-Turn callback spaghetti into linear async code:
+A callback-based read becomes a linear call:
 
 ```cpp
 class async_socket {
@@ -384,7 +382,7 @@ concept storable = std::is_trivially_copyable_v<T>
 
 ### fmt Support (Optional)
 
-ucoro has **no dependency on fmt**. However, if you include `<fmt/core.h>` before `<ucoro/ucoro.hpp>`, formatters for `coro::error` and `coro::state` are automatically enabled:
+If `<fmt/core.h>` is included before `<ucoro/ucoro.hpp>`, formatters for `coro::error` and `coro::state` are enabled:
 
 ```cpp
 #include <fmt/core.h>    // Include fmt first
