@@ -9,6 +9,8 @@ on:
       - 'ROADMAP.md'
       - 'mkdocs.yml'
       - '.github/workflows/docs.yml'
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -22,6 +24,7 @@ concurrency:
 
 jobs:
   build:
+    name: docs
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -30,13 +33,16 @@ jobs:
           python-version: '3.x'
       - run: pip install mkdocs-material
       - run: mkdocs build --strict
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
+      - if: github.event_name != 'pull_request'
+        uses: actions/configure-pages@v5
+      - if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v3
         with:
           path: site
 
   deploy:
     needs: build
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
