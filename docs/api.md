@@ -1,6 +1,6 @@
 # API reference
 
-### Error Handling
+## Errors
 
 All fallible operations return `std::expected<T, coro::error>`:
 
@@ -13,7 +13,7 @@ enum class error : std::uint8_t {
 };
 ```
 
-### Coroutine States
+## States
 
 ```cpp
 enum class state : std::uint8_t {
@@ -24,7 +24,7 @@ enum class state : std::uint8_t {
 };
 ```
 
-### `coro::coroutine`
+## `coro::coroutine`
 
 | Method | Description |
 |--------|-------------|
@@ -39,7 +39,7 @@ enum class state : std::uint8_t {
 | `exception()` | Get the `std::exception_ptr` |
 | `rethrow_if_exception()` | Rethrow the captured exception |
 
-### `coro::generator<T>`
+## `coro::generator<T>`
 
 | Method | Description |
 |--------|-------------|
@@ -48,7 +48,7 @@ enum class state : std::uint8_t {
 | `begin()` / `end()` | Range-for support via `std::default_sentinel` |
 | `done()` | Check if generator is exhausted |
 
-### `coro::task_runner`
+## `coro::task_runner`
 
 | Method | Description |
 |--------|-------------|
@@ -57,7 +57,7 @@ enum class state : std::uint8_t {
 | `step()` | Execute one round of all tasks. Returns `std::expected<bool, error>`; `true` if tasks remain |
 | `size()` / `empty()` | Query task count |
 
-### Configuration
+## Configuration
 
 ```cpp
 // Compile-time (define before including ucoro.hpp)
@@ -73,7 +73,7 @@ auto coro = coro::coroutine::create(func,
 );
 ```
 
-### Concepts
+## Concepts
 
 ```cpp
 // Types that can be pushed/popped through coroutine storage
@@ -83,7 +83,7 @@ concept storable = std::is_trivially_copyable_v<T>
                && (sizeof(T) <= UCORO_STORAGE_SIZE);
 ```
 
-### fmt Support (Optional)
+## fmt formatters
 
 If `<fmt/core.h>` is included before `<ucoro/ucoro.hpp>`, formatters for `coro::error` and `coro::state` are enabled:
 

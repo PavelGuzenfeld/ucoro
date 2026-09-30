@@ -1,17 +1,17 @@
 # Safety
 
-### Exception Safety
+## Exceptions
 
-Exceptions thrown inside a coroutine cannot propagate through assembly context-switch frames (that would be undefined behavior). ucoro catches exceptions at the coroutine boundary and stores them via `std::exception_ptr`. The caller can inspect or rethrow them after `resume()` returns.
+An exception can't propagate through the assembly switch; that would be undefined behavior. ucoro catches it at the coroutine boundary and keeps it as a `std::exception_ptr`, which the caller can inspect or rethrow after `resume()` returns.
 
-The unchecked API (`resume_unchecked()`) does **not** check for exceptions — use it only when you know the coroutine body won't throw.
+`resume_unchecked()` does not check for a captured exception. Use it only when the body can't throw.
 
-### Guard Pages
+## Guard pages
 
-By default on Linux, macOS, and Windows, ucoro allocates coroutine stacks using `mmap`/`VirtualAlloc` with a guard page between the metadata and the stack region. Stack overflow triggers a hardware fault (SIGSEGV/access violation) instead of silently corrupting adjacent memory.
+On Linux, macOS and Windows, stacks come from `mmap`/`VirtualAlloc` with a guard page between the metadata and the stack. An overflow faults (SIGSEGV or an access violation) instead of corrupting the memory next to it.
 
-Disable with `#define UCORO_GUARD_PAGES 0` if needed (embedded systems, custom allocators).
+`#define UCORO_GUARD_PAGES 0` turns this off, for embedded targets or custom allocators.
 
-### Stack Overflow Detection
+## Overflow checks
 
-In addition to guard pages, the safe `yield()` path checks the current stack pointer against the coroutine's stack bounds and validates a magic number. This catches overflows at yield points even without guard pages.
+The checked `yield()` also compares the stack pointer against the coroutine's stack bounds and checks a magic number, so an overflow is caught at the next yield even without guard pages.

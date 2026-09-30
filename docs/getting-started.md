@@ -19,11 +19,11 @@ target_link_libraries(your_target PRIVATE ucoro::ucoro)
 # Copy include/ucoro/ucoro.hpp to your project — no other files needed
 ```
 
-## Basic Usage
+## First coroutine
 
 ```cpp
 // main.cpp
-#define UCORO_IMPL  // Define in exactly ONE source file
+#define UCORO_IMPL  // in exactly one source file
 #include <ucoro/ucoro.hpp>
 #include <cstdio>
 
@@ -59,7 +59,7 @@ int main() {
 - CMake 3.22+
 - [fmt](https://github.com/fmtlib/fmt) (only for tests/benchmarks/examples; fetched automatically)
 
-### Build Commands
+### Build
 
 ```bash
 cmake -B build -DCMAKE_BUILD_TYPE=Release
@@ -67,7 +67,7 @@ cmake --build build --config Release
 ctest --test-dir build -C Release --output-on-failure
 ```
 
-### CMake Options
+### CMake options
 
 | Option                    | Default | Description                |
 | ------------------------- | ------- | -------------------------- |
@@ -76,7 +76,7 @@ ctest --test-dir build -C Release --output-on-failure
 | `UCORO_BUILD_EXAMPLES`    | `ON`    | Build examples             |
 | `UCORO_ENABLE_SANITIZERS` | `ON`    | Enable ASan/UBSan in Debug |
 
-## Platform Support
+## Platforms
 
 | Platform | Architecture          | Compiler           | Status          |
 | -------- | --------------------- | ------------------ | --------------- |
