@@ -47,3 +47,4 @@ install/
 #logs
 log*/
 .cache/
+site/

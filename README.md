@@ -1,8 +1,10 @@
 # ucoro
 
+<!-- --8<-- [start:about] -->
 A modern C++23 coroutine library providing **stackful coroutines** with blazing-fast context switching. Header-only, zero dependencies, cross-platform.
 
 Status: maintenance only. Bug fixes and platform fixes are accepted; the roadmap is on hold.
+<!-- --8<-- [end:about] -->
 
 [![CI](https://github.com/PavelGuzenfeld/ucoro/actions/workflows/ci.yml/badge.svg)](https://github.com/PavelGuzenfeld/ucoro/actions/workflows/ci.yml) [![Sanitizers](https://github.com/PavelGuzenfeld/ucoro/actions/workflows/sanitizers.yml/badge.svg)](https://github.com/PavelGuzenfeld/ucoro/actions/workflows/sanitizers.yml) [![C++23](https://img.shields.io/badge/C%2B%2B-23-blue.svg)](https://en.cppreference.com/w/cpp/23) [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE) [![Header Only](https://img.shields.io/badge/header--only-yes-brightgreen.svg)]() [![Platform](https://img.shields.io/badge/platform-windows%20%7C%20linux%20%7C%20macos-lightgrey.svg)]()
 
@@ -15,6 +17,7 @@ Status: maintenance only. Bug fixes and platform fixes are accepted; the roadmap
 
 ## Features
 
+<!-- --8<-- [start:features] -->
 - **40-100 ns context switches** - 10-39x faster than POSIX `ucontext`; about 2x slower than Boost.Context on Linux x64 (see [Benchmarks](#benchmarks))
 - **Modern C++23 API** - `std::expected`, concepts, strong types, `[[nodiscard]]`
 - **Header-only, zero dependencies** - single header, no forced third-party libraries
@@ -28,10 +31,13 @@ Status: maintenance only. Bug fixes and platform fixes are accepted; the roadmap
 - **Type-safe storage** - LIFO data passing between coroutine and caller
 - **fmt support** - optional `fmt::formatter` specializations (auto-detected)
 
+<!-- --8<-- [end:features] -->
+
 See the **[Roadmap](ROADMAP.md)** for ideas; the project is maintenance-only.
 
 ## Quick Start
 
+<!-- --8<-- [start:quickstart] -->
 ### Installation
 
 **Option 1: CMake FetchContent**
@@ -83,6 +89,9 @@ int main() {
 }
 ```
 
+<!-- --8<-- [end:quickstart] -->
+
+<!-- --8<-- [start:guide] -->
 ### Generators
 
 ```cpp
@@ -181,8 +190,11 @@ coro->resume_unchecked();
 int result = coro->pop_unchecked<int>(); // 42
 ```
 
+<!-- --8<-- [end:guide] -->
+
 ## Advanced Examples
 
+<!-- --8<-- [start:examples] -->
 These examples demonstrate why you'd choose stackful coroutines over C++20's stackless `co_await`/`co_yield`.
 
 ### Deep Yield (Yield From Any Call Depth)
@@ -282,8 +294,11 @@ auto handler = coro::coroutine::create([&](coro::coroutine_handle h) {
 self = &*handler;
 ```
 
+<!-- --8<-- [end:examples] -->
+
 ## API Reference
 
+<!-- --8<-- [start:api] -->
 ### Error Handling
 
 All fallible operations return `std::expected<T, coro::error>`:
@@ -379,8 +394,11 @@ fmt::println("state: {}", coro.status());     // "state: suspended"
 fmt::println("error: {}", result.error());    // "error: invalid arguments"
 ```
 
+<!-- --8<-- [end:api] -->
+
 ## Safety
 
+<!-- --8<-- [start:safety] -->
 ### Exception Safety
 
 Exceptions thrown inside a coroutine cannot propagate through assembly context-switch frames (that would be undefined behavior). ucoro catches exceptions at the coroutine boundary and stores them via `std::exception_ptr`. The caller can inspect or rethrow them after `resume()` returns.
@@ -397,8 +415,11 @@ Disable with `#define UCORO_GUARD_PAGES 0` if needed (embedded systems, custom a
 
 In addition to guard pages, the safe `yield()` path checks the current stack pointer against the coroutine's stack bounds and validates a magic number. This catches overflows at yield points even without guard pages.
 
+<!-- --8<-- [end:safety] -->
+
 ## Benchmarks
 
+<!-- --8<-- [start:benchmarks] -->
 All numbers from Release builds with LTO enabled.
 
 ### Context Switch Latency (median, lower is better)
@@ -431,8 +452,11 @@ All numbers from Release builds with LTO enabled.
 | Default storage          | 1 KB      |
 | Guard page overhead      | ~8 KB     |
 
+<!-- --8<-- [end:benchmarks] -->
+
 ## Building
 
+<!-- --8<-- [start:building] -->
 ### Requirements
 
 - C++23 compiler (GCC 13+, Clang 18+, MSVC 2022+)
@@ -466,6 +490,9 @@ ctest --test-dir build -C Release --output-on-failure
 | macOS    | x86_64                | Apple Clang 15+    | Supported       |
 | Windows  | x64                   | MSVC 2022+         | Tested in CI    |
 
+<!-- --8<-- [end:building] -->
+
+<!-- --8<-- [start:design] -->
 ## How It Works
 
 ucoro uses hand-written assembly for context switching on each platform:
@@ -491,6 +518,8 @@ C++20 coroutines are **stackless** - they can only suspend at explicit `co_await
 - Wrap legacy callback-based APIs as linear code
 - Implement green threads, fibers, game AI behavior trees
 - No viral `async`/`await` propagation
+
+<!-- --8<-- [end:design] -->
 
 ## License
 
