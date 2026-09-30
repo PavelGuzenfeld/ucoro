@@ -1,6 +1,6 @@
 # Benchmarks
 
-One round trip is a resume plus the matching yield. `benchmark_ucoro` times 100 batches per case and reports the median batch divided by its size, so clock overhead is spread over the batch instead of added to every switch.
+A round trip is one resume plus its yield. `benchmark_ucoro` times 100 batches per case and reports the median batch divided by its size, so the clock cost is spread over a batch rather than added to every switch.
 
 ## Context switch round trip
 
@@ -16,7 +16,7 @@ Linux x64, Intel i7-12700H, pinned to one P-core, GCC 14 `-O3` with LTO, Boost 1
 
 Windows x64 and ARM64 have not been measured with this harness.
 
-## Memory Overhead
+## Memory
 
 | Type                     | Size      |
 | ------------------------ | --------- |

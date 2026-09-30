@@ -20,7 +20,7 @@ for (int value : *fib) {
 // Output: 0 1 1 2 3 5 8 13 21 34 55 89 144
 ```
 
-## Data Passing (Storage)
+## Passing data
 
 ```cpp
 auto coro = coro::coroutine::create([](coro::coroutine_handle h) {
@@ -35,7 +35,7 @@ auto coro = coro::coroutine::create([](coro::coroutine_handle h) {
 // Output: received: 42
 ```
 
-## Task Runner
+## Task runner
 
 ```cpp
 coro::task_runner runner;
@@ -56,13 +56,13 @@ runner.add(std::move(*coro::coroutine::create([](coro::coroutine_handle h) {
 // Output: task A: step 1, task B: step 1, task A: step 2, task B: step 2
 ```
 
-## Exception Safety
+## Exceptions
 
 Exceptions thrown inside a coroutine are captured and can be inspected by the caller:
 
 ```cpp
 auto coro = coro::coroutine::create([](coro::coroutine_handle h) {
-    (void)h.yield();  // first resume works fine
+    (void)h.yield();
     throw std::runtime_error("something went wrong");
 });
 
@@ -78,11 +78,11 @@ if (coro->has_exception()) {
 }
 ```
 
-Without this, exceptions unwinding through assembly context-switch frames would be undefined behavior. ucoro catches them at the boundary and stores them for safe retrieval.
+An exception can't unwind through the assembly switch, so ucoro catches it at the coroutine boundary. See [Safety](safety.md).
 
 ## Unchecked API
 
-For hot paths where you've already validated state:
+These skip the state checks. Use them only when you already know the state:
 
 ```cpp
 auto coro = coro::coroutine::create([](coro::coroutine_handle h) {
