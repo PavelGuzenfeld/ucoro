@@ -2,7 +2,9 @@
 
 A modern C++23 coroutine library providing **stackful coroutines** with blazing-fast context switching. Header-only, zero dependencies, cross-platform.
 
-[![CI](https://github.com/PavelGuzenfeld/ucoro/actions/workflows/ci.yml/badge.svg)](https://github.com/PavelGuzenfeld/ucoro/actions/workflows/ci.yml) [![Sanitizers](https://github.com/PavelGuzenfeld/ucoro/actions/workflows/sanitizers.yml/badge.svg)](https://github.com/PavelGuzenfeld/ucoro/actions/workflows/sanitizers.yml) [![C++23](https://img.shields.io/badge/C%2B%2B-23-blue.svg)](https://en.cppreference.com/w/cpp/23) [![License](https://img.shields.io/badge/license-MIT%2FUnlicense-green.svg)](LICENSE) [![Header Only](https://img.shields.io/badge/header--only-yes-brightgreen.svg)]() [![Platform](https://img.shields.io/badge/platform-windows%20%7C%20linux%20%7C%20macos-lightgrey.svg)]()
+Status: maintenance only. Bug fixes and platform fixes are accepted; the roadmap is on hold.
+
+[![CI](https://github.com/PavelGuzenfeld/ucoro/actions/workflows/ci.yml/badge.svg)](https://github.com/PavelGuzenfeld/ucoro/actions/workflows/ci.yml) [![Sanitizers](https://github.com/PavelGuzenfeld/ucoro/actions/workflows/sanitizers.yml/badge.svg)](https://github.com/PavelGuzenfeld/ucoro/actions/workflows/sanitizers.yml) [![C++23](https://img.shields.io/badge/C%2B%2B-23-blue.svg)](https://en.cppreference.com/w/cpp/23) [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE) [![Header Only](https://img.shields.io/badge/header--only-yes-brightgreen.svg)]() [![Platform](https://img.shields.io/badge/platform-windows%20%7C%20linux%20%7C%20macos-lightgrey.svg)]()
 
 | Compiler    | Minimum Version |
 | ----------- | --------------- |
@@ -13,7 +15,7 @@ A modern C++23 coroutine library providing **stackful coroutines** with blazing-
 
 ## Features
 
-- **~40ns context switches** - 10-19x faster than POSIX `ucontext`, competitive with Boost.Context
+- **40-100 ns context switches** - 10-39x faster than POSIX `ucontext`; about 2x slower than Boost.Context on Linux x64 (see [Benchmarks](#benchmarks))
 - **Modern C++23 API** - `std::expected`, concepts, strong types, `[[nodiscard]]`
 - **Header-only, zero dependencies** - single header, no forced third-party libraries
 - **Exception safe** - exceptions in coroutines are captured, not undefined behavior
@@ -37,7 +39,7 @@ See the **[Roadmap](ROADMAP.md)** for planned features and release schedule.
 include(FetchContent)
 FetchContent_Declare(ucoro
     GIT_REPOSITORY https://github.com/PavelGuzenfeld/ucoro.git
-    GIT_TAG main
+    GIT_TAG v0.1.0
 )
 FetchContent_MakeAvailable(ucoro)
 
@@ -487,6 +489,6 @@ C++20 coroutines are **stackless** - they can only suspend at explicit `co_await
 
 ## License
 
-MIT OR Unlicense (your choice)
+MIT
 
 Based on [minicoro](https://github.com/edubart/minicoro) by Eduardo Bart.
