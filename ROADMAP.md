@@ -9,13 +9,13 @@ Current version: **0.1.0**. Maintenance only; the milestones below are on hold.
 - [x] Modern C++23 API (`std::expected`, concepts, strong types, `[[nodiscard]]`)
 - [x] Header-only distribution (single header, define `UCORO_IMPL` in one TU)
 - [x] Zero-overhead abstractions (safe API adds minimal overhead vs raw C)
-- [x] Cross-platform support (Windows x64, Linux x64/ARM64, macOS x64/ARM64)
+- [x] Cross-platform support (CI: Windows x64, Linux x64, macOS ARM64; Linux ARM64 and macOS x64 implemented, not CI-tested)
 
 ### Safety (Complete)
 - [x] Exception safety — exceptions in coroutines captured via `std::exception_ptr`, not UB
 - [x] Guard pages — mmap/VirtualAlloc + mprotect/VirtualProtect for stack overflow detection
 - [x] Zero dependencies — fmt auto-detected via `#ifdef FMT_VERSION`, never required
-- [x] Zero-alloc callable — `std::function` placement-new'd into coroutine's contiguous allocation (no separate heap alloc per coroutine)
+- [x] Single-block callable — the `std::function` object is placement-new'd into the coroutine's allocation; captures beyond its small buffer still allocate once
 
 ### API (Complete)
 - [x] `coro::coroutine` — stackful coroutine with RAII semantics
@@ -38,7 +38,7 @@ Current version: **0.1.0**. Maintenance only; the milestones below are on hold.
 
 ---
 
-## Version 0.1.0 — Stabilization
+## Next — Stabilization (unscheduled)
 
 ### Code Quality
 - [ ] Split header into maintainable sections (`detail/`, `fwd.hpp`, etc.)
@@ -56,7 +56,7 @@ Current version: **0.1.0**. Maintenance only; the milestones below are on hold.
 - [ ] `.clang-format` config (project style)
 - [ ] `.clang-tidy` config (enabled checks)
 - [ ] CI runs pre-commit on all PRs (fail-fast)
-- [x] CI build matrix: GCC + Clang × Debug + Release
+- [ ] CI build matrix: GCC + Clang × Debug + Release (CI builds Release only; Debug runs only in the Clang sanitizer job)
 - [x] CI sanitizer job (ASan + UBSan)
 - [ ] Code coverage reporting (gcov/llvm-cov)
 - [ ] Coverage threshold gate (e.g., 80% minimum)

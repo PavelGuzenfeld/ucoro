@@ -20,15 +20,15 @@ Status: maintenance only. Bug fixes and platform fixes are accepted; the roadmap
 - **Header-only, zero dependencies** - single header, no forced third-party libraries
 - **Exception safe** - exceptions in coroutines are captured, not undefined behavior
 - **Guard pages** - stack overflow triggers SIGSEGV/access violation instead of silent corruption
-- **Single-allocation design** - callable, metadata, storage, and stack in one contiguous block (no extra heap alloc)
+- **Single-allocation design** - the `std::function` object, metadata, storage, and stack share one contiguous block; a capture larger than `std::function`'s small buffer still allocates once
 - **Zero-overhead abstractions** - safe API adds minimal overhead vs raw C; unchecked API adds none
-- **Cross-platform** - Windows x64, Linux x64/ARM64, macOS x64/ARM64
+- **Cross-platform** - CI-tested on Windows x64, Linux x64 and macOS ARM64; Linux ARM64 and macOS x64 are implemented but not CI-tested
 - **Generators** - Python-style generators with range-for support
 - **Task runner** - cooperative round-robin scheduler
 - **Type-safe storage** - LIFO data passing between coroutine and caller
 - **fmt support** - optional `fmt::formatter` specializations (auto-detected)
 
-See the **[Roadmap](ROADMAP.md)** for planned features and release schedule.
+See the **[Roadmap](ROADMAP.md)** for ideas; the project is maintenance-only.
 
 ## Quick Start
 
@@ -205,8 +205,8 @@ auto json_worker = coro::coroutine::create([&](coro::coroutine_handle h) {
     process_large_file(h, massive_json_stream);
 });
 
-while (!json_worker.done()) {
-    json_worker.resume_unchecked();
+while (!json_worker->done()) {
+    json_worker->resume_unchecked();
     handle_ui_events();  // UI never freezes
 }
 ```
@@ -250,31 +250,36 @@ Turn callback spaghetti into linear async code:
 
 ```cpp
 class async_socket {
-    coro::coroutine* coro_;
+    coro::coroutine_handle h_;
+    coro::coroutine* self_;
     std::span<std::byte const> last_read_;
     std::error_code last_error_;
 
 public:
+    async_socket(coro::coroutine_handle h, coro::coroutine* self) : h_{h}, self_{self} {}
+
     auto read(socket_t sock, std::span<std::byte> buffer)
         -> std::expected<std::span<std::byte const>, std::error_code>
     {
         async_read(sock, buffer, [this](auto data, auto ec) {
             last_read_ = data;
             last_error_ = ec;
-            coro_->resume_unchecked();  // Callback resumes us
+            self_->resume_unchecked();  // Callback resumes us
         });
-        coro::running()->yield_unchecked();  // Suspend until callback fires
+        h_.yield_unchecked();  // Suspend until callback fires
         if (last_error_) return std::unexpected(last_error_);
         return last_read_;
     }
 };
 
+coro::coroutine* self = nullptr;
 auto handler = coro::coroutine::create([&](coro::coroutine_handle h) {
-    async_socket sock{h};
+    async_socket sock{h, self};
     auto header = sock.read(client, buffer);  // Looks sync, is async
     auto body = sock.read(client, buffer);
-    sock.write(client, generate_response(*header, body.value_or({})));
+    sock.write(client, generate_response(*header, body.value_or(std::span<std::byte const>{})));
 });
+self = &*handler;
 ```
 
 ## API Reference
@@ -333,7 +338,7 @@ enum class state : std::uint8_t {
 |--------|-------------|
 | `add(coroutine&&)` | Add a task to the scheduler |
 | `run()` | Run all tasks to completion (round-robin) |
-| `step()` | Execute one round of all tasks. Returns `true` if tasks remain |
+| `step()` | Execute one round of all tasks. Returns `std::expected<bool, error>`; `true` if tasks remain |
 | `size()` / `empty()` | Query task count |
 
 ### Configuration
@@ -421,7 +426,7 @@ All numbers from Release builds with LTO enabled.
 | `coro::coroutine`        | 24 bytes  |
 | `coro::coroutine_handle` | 8 bytes   |
 | `coro::task_runner`      | 24 bytes  |
-| Internal `mco_coro`      | 136 bytes |
+| Internal `mco_coro`      | 152 bytes |
 | Default stack            | 56 KB     |
 | Default storage          | 1 KB      |
 | Guard page overhead      | ~8 KB     |
