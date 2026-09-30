@@ -1,6 +1,3 @@
-// generator.cpp - python-style generator example
-// because yield is the new return
-
 #include <fmt/core.h>
 
 #define UCORO_IMPL
@@ -12,7 +9,6 @@ int main()
 {
     fmt::print("=== generator example ===\n");
 
-    // fibonacci generator
     fmt::print("fibonacci sequence:\n  ");
     {
         auto fib_gen = coro::generator<int>::create([](coro::coroutine_handle h)
@@ -35,7 +31,6 @@ int main()
         }
     }
 
-    // prime number generator
     fmt::print("\nprime numbers up to 50:\n  ");
     {
         auto is_prime = [](int n) -> bool
@@ -72,7 +67,6 @@ int main()
         }
     }
 
-    // squares generator with sum
     fmt::print("\nsquares of 1-10:\n  ");
     {
         auto squares = coro::generator<int>::create([](coro::coroutine_handle h)

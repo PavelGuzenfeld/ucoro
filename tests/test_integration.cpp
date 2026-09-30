@@ -1,6 +1,3 @@
-// test_integration.cpp - end-to-end integration tests for ucoro
-// Tests real-world scenarios combining multiple features.
-
 #include <fmt/core.h>
 
 #define UCORO_IMPL
@@ -17,9 +14,13 @@
 #include <thread>
 #include <vector>
 
-// Simple test framework (no doctest dependency for integration tests)
 static int tests_passed = 0;
 static int tests_failed = 0;
+
+constexpr double release_switch_budget_ns = 200.0;
+constexpr double asan_debug_10x_budget_ns = 2000.0;
+constexpr double create_destroy_budget_ns = 100000.0;
+constexpr double min_speedup_vs_ucontext = 2.0;
 
 #define ASSERT_TRUE(expr)                                                    \
     do                                                                       \
@@ -56,13 +57,8 @@ static int tests_failed = 0;
         prev_failed = tests_failed;                         \
     } while (0)
 
-// ============================================================================
-// Integration Test: Producer-Consumer Pipeline
-// ============================================================================
-
 void test_producer_consumer_pipeline()
 {
-    // Producer generates values, consumer processes them, results collected
     std::vector<int> results;
 
     auto producer = coro::generator<int>::create([](coro::coroutine_handle h)
@@ -85,16 +81,11 @@ void test_producer_consumer_pipeline()
     ASSERT_EQ(results[9], 100);
 
     int sum = std::accumulate(results.begin(), results.end(), 0);
-    ASSERT_EQ(sum, 385); // sum of squares 1..10
+    ASSERT_EQ(sum, 385);
 }
-
-// ============================================================================
-// Integration Test: Cooperative Task Scheduling
-// ============================================================================
 
 void test_cooperative_scheduling()
 {
-    // Simulate 3 independent tasks doing "work" in round-robin
     std::vector<std::string> log;
     coro::task_runner runner;
 
@@ -119,34 +110,24 @@ void test_cooperative_scheduling()
     ASSERT_TRUE(run_result.has_value());
     ASSERT_TRUE(runner.empty());
 
-    // Verify interleaving: A, B, C should alternate
     ASSERT_EQ(log.size(), 9u);
 
-    // First round: all three run
     ASSERT_EQ(log[0], "A:0");
     ASSERT_EQ(log[1], "B:0");
     ASSERT_EQ(log[2], "C:0");
 
-    // Second round: A, B, C (B finishes)
     ASSERT_EQ(log[3], "A:1");
     ASSERT_EQ(log[4], "B:1");
     ASSERT_EQ(log[5], "C:1");
 
-    // Third round: A finishes, C continues
     ASSERT_EQ(log[6], "A:2");
     ASSERT_EQ(log[7], "C:2");
 
-    // Fourth round: only C
     ASSERT_EQ(log[8], "C:3");
 }
 
-// ============================================================================
-// Integration Test: Data Passing Ping-Pong
-// ============================================================================
-
 void test_data_passing_ping_pong()
 {
-    // Coroutine receives a value, doubles it, sends back, repeat
     auto result = coro::coroutine::create([](coro::coroutine_handle h)
                                            {
         for (int i = 0; i < 5; ++i)
@@ -173,20 +154,14 @@ void test_data_passing_ping_pong()
         value = *popped;
     }
 
-    // 1 -> 2 -> 4 -> 8 -> 16 -> 32
     ASSERT_EQ(value, 32);
 }
-
-// ============================================================================
-// Integration Test: Deep Yield (Stackful Advantage)
-// ============================================================================
 
 static void recursive_yield(coro::coroutine_handle h, int depth, int max_depth, std::vector<int> &trace)
 {
     trace.push_back(depth);
     if (depth < max_depth)
     {
-        // Yield from deep in the call stack — impossible with stackless coroutines
         [[maybe_unused]] auto _ = h.yield();
         recursive_yield(h, depth + 1, max_depth, trace);
     }
@@ -206,7 +181,6 @@ void test_deep_yield()
         (void)coro.resume();
     }
 
-    // Should have depths 0, 1, 2, 3, 4, 5
     ASSERT_EQ(trace.size(), 6u);
     for (std::size_t i = 0; i < trace.size(); ++i)
     {
@@ -214,13 +188,8 @@ void test_deep_yield()
     }
 }
 
-// ============================================================================
-// Integration Test: Generator Chaining
-// ============================================================================
-
 void test_generator_chaining()
 {
-    // Generate fibonacci, filter evens, take first 5
     auto fib_gen = coro::generator<int>::create([](coro::coroutine_handle h)
                                                  {
         int a = 0, b = 1;
@@ -246,7 +215,6 @@ void test_generator_chaining()
     }
 
     ASSERT_EQ(even_fibs.size(), 5u);
-    // Even Fibonacci numbers: 0, 2, 8, 34, 144
     ASSERT_EQ(even_fibs[0], 0);
     ASSERT_EQ(even_fibs[1], 2);
     ASSERT_EQ(even_fibs[2], 8);
@@ -254,13 +222,8 @@ void test_generator_chaining()
     ASSERT_EQ(even_fibs[4], 144);
 }
 
-// ============================================================================
-// Integration Test: Exception Propagation Through Yields
-// ============================================================================
-
 void test_exception_after_work()
 {
-    // Coroutine does real work, then fails
     std::vector<int> processed;
     auto result = coro::coroutine::create([&processed](coro::coroutine_handle h)
                                            {
@@ -274,7 +237,6 @@ void test_exception_after_work()
     ASSERT_TRUE(result.has_value());
     auto &coro = *result;
 
-    // First 3 resumes should work
     for (int i = 0; i < 3; ++i)
     {
         auto r = coro.resume();
@@ -282,19 +244,16 @@ void test_exception_after_work()
         ASSERT_TRUE(!coro.has_exception());
     }
 
-    // 4th resume: coroutine throws
     auto r = coro.resume();
-    ASSERT_TRUE(r.has_value()); // resume itself succeeds
+    ASSERT_TRUE(r.has_value());
     ASSERT_TRUE(coro.done());
     ASSERT_TRUE(coro.has_exception());
 
-    // Work before exception was captured
     ASSERT_EQ(processed.size(), 3u);
     ASSERT_EQ(processed[0], 0);
     ASSERT_EQ(processed[1], 10);
     ASSERT_EQ(processed[2], 20);
 
-    // Exception is retrievable
     bool caught = false;
     try
     {
@@ -307,10 +266,6 @@ void test_exception_after_work()
     }
     ASSERT_TRUE(caught);
 }
-
-// ============================================================================
-// Integration Test: Multi-threaded Independence
-// ============================================================================
 
 void test_multithread_independence()
 {
@@ -345,7 +300,6 @@ void test_multithread_independence()
     for (auto &t : threads)
         t.join();
 
-    // Each thread should have sum = (t+1) * 2 * iterations
     for (int t = 0; t < num_threads; ++t)
     {
         int expected = (t + 1) * 2 * iterations;
@@ -353,13 +307,8 @@ void test_multithread_independence()
     }
 }
 
-// ============================================================================
-// Integration Test: Step-by-Step Task Runner
-// ============================================================================
-
 void test_task_runner_step()
 {
-    // Use step() for frame-by-frame game-like updates
     std::vector<int> frames;
     coro::task_runner runner;
 
@@ -381,17 +330,13 @@ void test_task_runner_step()
         auto result = runner.step();
         ASSERT_TRUE(result.has_value());
         step_count++;
-        if (!*result) // no more tasks
+        if (!*result)
             break;
     }
 
     ASSERT_EQ(step_count, 5);
     ASSERT_EQ(frames.size(), 5u);
 }
-
-// ============================================================================
-// Integration Test: Large Struct Transfer
-// ============================================================================
 
 void test_large_struct_transfer()
 {
@@ -409,7 +354,6 @@ void test_large_struct_transfer()
             auto data = h.pop<SensorData>();
             if (data)
             {
-                // Process: scale all readings
                 received = *data;
                 for (auto &r : received.readings)
                     r *= 2.0f;
@@ -438,13 +382,8 @@ void test_large_struct_transfer()
     }
 }
 
-// ============================================================================
-// Integration Test: Coroutine Move Semantics Under Stress
-// ============================================================================
-
 void test_move_semantics_stress()
 {
-    // Create, move, store in vector, run — exercises RAII
     std::vector<coro::coroutine> coroutines;
     std::atomic<int> counter{0};
 
@@ -459,7 +398,6 @@ void test_move_semantics_stress()
         coroutines.push_back(std::move(*result));
     }
 
-    // Resume all once
     for (auto &c : coroutines)
     {
         auto r = c.resume();
@@ -467,14 +405,12 @@ void test_move_semantics_stress()
     }
     ASSERT_EQ(counter.load(), 100);
 
-    // Move half into a new vector
     std::vector<coro::coroutine> moved;
     for (std::size_t i = 0; i < 50; ++i)
     {
         moved.push_back(std::move(coroutines[i]));
     }
 
-    // Resume moved ones
     for (auto &c : moved)
     {
         auto r = c.resume();
@@ -482,13 +418,11 @@ void test_move_semantics_stress()
     }
     ASSERT_EQ(counter.load(), 150);
 
-    // Original moved-from coroutines should be invalid
     for (std::size_t i = 0; i < 50; ++i)
     {
         ASSERT_TRUE(!coroutines[i].valid());
     }
 
-    // Remaining ones still valid
     for (std::size_t i = 50; i < 100; ++i)
     {
         ASSERT_TRUE(coroutines[i].valid());
@@ -497,14 +431,8 @@ void test_move_semantics_stress()
     ASSERT_EQ(counter.load(), 200);
 }
 
-// ============================================================================
-// Integration Test: Guard Page Verification
-// ============================================================================
-
 void test_guard_page_mmap_allocation()
 {
-    // Verify coroutines with guard pages can be created and used normally
-    // (Guard pages use mmap instead of calloc — verify no regression)
     constexpr int count = 50;
     std::vector<coro::coroutine> coroutines;
 
@@ -513,7 +441,7 @@ void test_guard_page_mmap_allocation()
         auto result = coro::coroutine::create(
             [i](coro::coroutine_handle h)
             {
-                volatile int x = i * i; // use stack
+                volatile int x = i * i;
                 (void)x;
                 [[maybe_unused]] auto _ = h.yield();
                 volatile int y = i * i * i;
@@ -524,7 +452,6 @@ void test_guard_page_mmap_allocation()
         coroutines.push_back(std::move(*result));
     }
 
-    // Resume all twice (yield + finish)
     for (auto &c : coroutines)
     {
         (void)c.resume();
@@ -536,13 +463,8 @@ void test_guard_page_mmap_allocation()
         ASSERT_TRUE(c.done());
     }
 
-    // Destructor should cleanly munmap all allocations
     coroutines.clear();
 }
-
-// ============================================================================
-// Performance Test: Context Switch Latency
-// ============================================================================
 
 void test_perf_context_switch()
 {
@@ -571,7 +493,7 @@ void test_perf_context_switch()
 
     fmt::println("");
     fmt::println("    Context switch (unchecked): {:.1f} ns/op, {:.1f}M ops/sec", ns_per_switch, ops_per_sec / 1e6);
-    ASSERT_TRUE(ns_per_switch < 200.0); // should be well under 200ns
+    ASSERT_TRUE(ns_per_switch < release_switch_budget_ns);
 }
 
 void test_perf_context_switch_safe()
@@ -601,7 +523,7 @@ void test_perf_context_switch_safe()
 
     fmt::println("");
     fmt::println("    Context switch (safe):      {:.1f} ns/op, {:.1f}M ops/sec", ns_per_switch, ops_per_sec / 1e6);
-    ASSERT_TRUE(ns_per_switch < 2000.0); // generous limit (ASan adds ~10x overhead in Debug)
+    ASSERT_TRUE(ns_per_switch < asan_debug_10x_budget_ns);
 }
 
 void test_perf_create_destroy()
@@ -612,7 +534,7 @@ void test_perf_create_destroy()
     for (int i = 0; i < iterations; ++i)
     {
         auto coro = coro::coroutine::create([](coro::coroutine_handle) {});
-        (void)coro; // RAII destroy
+        (void)coro;
     }
     auto end = std::chrono::high_resolution_clock::now();
 
@@ -621,7 +543,7 @@ void test_perf_create_destroy()
 
     fmt::println("");
     fmt::println("    Create+destroy: {:.0f} ns/op", ns_per_op);
-    ASSERT_TRUE(ns_per_op < 100000.0); // should be well under 100us
+    ASSERT_TRUE(ns_per_op < create_destroy_budget_ns);
 }
 
 void test_perf_generator_throughput()
@@ -651,7 +573,7 @@ void test_perf_generator_throughput()
 
     fmt::println("");
     fmt::println("    Generator iteration: {:.1f} ns/op, {:.1f}M ops/sec", ns_per_op, ops_per_sec / 1e6);
-    ASSERT_TRUE(ns_per_op < 2000.0); // generous limit (ASan adds ~10x overhead in Debug)
+    ASSERT_TRUE(ns_per_op < asan_debug_10x_budget_ns);
 }
 
 void test_perf_storage_throughput()
@@ -692,12 +614,8 @@ void test_perf_storage_throughput()
 
     fmt::println("");
     fmt::println("    Push+switch+pop (unchecked): {:.1f} ns/op", ns_per_op);
-    ASSERT_TRUE(ns_per_op < 2000.0); // generous limit (ASan adds ~10x overhead in Debug)
+    ASSERT_TRUE(ns_per_op < asan_debug_10x_budget_ns);
 }
-
-// ============================================================================
-// Integration Test: vs ucontext comparison
-// ============================================================================
 
 #ifdef __unix__
 #include <ucontext.h>
@@ -721,7 +639,6 @@ void test_perf_vs_ucontext()
 
     constexpr int iterations = 1000000;
 
-    // Warmup
     for (int i = 0; i < 10000; ++i)
         swapcontext(&uctx_main_it, &uctx_coro_it);
 
@@ -733,7 +650,6 @@ void test_perf_vs_ucontext()
     auto ns_uctx = std::chrono::duration_cast<std::chrono::nanoseconds>(end_uctx - start_uctx).count();
     double ns_per_uctx = static_cast<double>(ns_uctx) / iterations;
 
-    // ucoro unchecked
     auto coro_result = coro::coroutine::create([](coro::coroutine_handle h)
                                                 {
         while (true)
@@ -758,13 +674,9 @@ void test_perf_vs_ucontext()
     fmt::println("    ucoro unchecked: {:.1f} ns/op", ns_per_ucoro);
     fmt::println("    speedup:         {:.1f}x", speedup);
 
-    ASSERT_TRUE(speedup > 2.0); // must be at least 2x faster
+    ASSERT_TRUE(speedup > min_speedup_vs_ucontext);
 }
 #endif
-
-// ============================================================================
-// Main
-// ============================================================================
 
 int main()
 {
