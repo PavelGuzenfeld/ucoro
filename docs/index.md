@@ -6,13 +6,13 @@ Status: maintenance only. Bug fixes and platform fixes are accepted.
 
 ## Features
 
-- **40-100 ns context switches** - 10-39x faster than POSIX `ucontext`; about 2x slower than Boost.Context on Linux x64
+- **Fast context switches** - 6.4 ns per round trip on Linux x64, within about 25% of Boost.Context and about 60x faster than POSIX `ucontext`
 - **C++23 API** - `std::expected`, concepts, strong types, `[[nodiscard]]`
 - **Header-only, no dependencies** - one header; fmt formatters only if you include fmt
 - **Exception safe** - exceptions in coroutines are captured, not undefined behavior
 - **Guard pages** - stack overflow triggers SIGSEGV/access violation instead of silent corruption
 - **Single-allocation design** - the `std::function` object, metadata, storage, and stack share one contiguous block; a capture larger than `std::function`'s small buffer still allocates once
-- **Checked and unchecked APIs** - the checked path costs about 3 ns per switch on Linux x64
+- **Checked and unchecked APIs** - the checked path costs about 0.7 ns per round trip on Linux x64
 - **Cross-platform** - CI-tested on Windows x64, Linux x64 and macOS ARM64; Linux ARM64 and macOS x64 are implemented but not CI-tested
 - **Generators** - `generator<T>` works in range-for
 - **Task runner** - cooperative round-robin scheduler

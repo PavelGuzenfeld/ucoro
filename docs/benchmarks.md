@@ -1,26 +1,22 @@
 # Benchmarks
 
-All numbers from Release builds with LTO enabled.
+One round trip is a resume plus the matching yield. `benchmark_ucoro` times 100 batches per case and reports the median batch divided by its size, so clock overhead is spread over the batch instead of added to every switch.
 
-### Context Switch Latency (median, lower is better)
+## Context switch round trip
 
-| Platform                      | ucoro Safe | ucoro Unchecked | Boost.Context | ucontext | Speedup vs ucontext |
-| ----------------------------- | ---------- | --------------- | ------------- | -------- | ------------------- |
-| **Linux x64** (GCC 13)        | 55 ns      | **52 ns**       | 29 ns         | 499 ns   | **~10x**            |
-| **Windows x64** (MSVC, CI)    | 100 ns     | 100 ns          | N/A           | N/A      | -                   |
-| **macOS ARM64** (CI)          | 42 ns      | 42 ns           | N/A           | 1,625 ns | **~39x**            |
-| **Ubuntu x64** (Clang 18, CI) | 40 ns      | 40 ns           | N/A           | 652 ns   | **~16x**            |
+Linux x64, Intel i7-12700H, pinned to one P-core, GCC 14 `-O3` with LTO, Boost 1.83. Median of three runs, measured 2026-10-01.
 
-### Context Switch Throughput (ops/sec, higher is better)
+| Implementation  | ns per round trip |
+| --------------- | ----------------- |
+| ucoro raw C API | 5.6               |
+| ucoro unchecked | 6.4               |
+| ucoro safe      | 7.1               |
+| Boost.Context   | 5.2               |
+| POSIX ucontext  | 382               |
 
-| Platform                      | ucoro Safe | ucoro Unchecked | Boost.Context | ucontext |
-| ----------------------------- | ---------- | --------------- | ------------- | -------- |
-| **Linux x64** (GCC 13)        | 15.0M      | **16.5M**      | 30.6M         | 1.7M     |
-| **Windows x64** (CI)          | 18.1M      | 18.2M           | N/A           | N/A      |
-| **macOS ARM64** (CI)          | 30.3M      | 30.8M           | N/A           | 611K     |
-| **Ubuntu x64** (Clang 18, CI) | 23.2M      | 22.1M           | N/A           | 1.51M    |
+Windows x64 and ARM64 have not been measured with this harness.
 
-### Memory Overhead
+## Memory Overhead
 
 | Type                     | Size      |
 | ------------------------ | --------- |
