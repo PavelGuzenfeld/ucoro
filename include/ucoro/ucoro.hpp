@@ -1262,9 +1262,10 @@ namespace coro::detail
         ".hidden _mco_switch\n"
         "_mco_switch:\n"
 #endif
-        "  leaq 0x3d(%rip), %rax\n"
+        "  movq (%rsp), %rax\n"
         "  movq %rax, (%rdi)\n"
-        "  movq %rsp, 8(%rdi)\n"
+        "  leaq 8(%rsp), %rdx\n"
+        "  movq %rdx, 8(%rdi)\n"
         "  movq %rbp, 16(%rdi)\n"
         "  movq %rbx, 24(%rdi)\n"
         "  movq %r12, 32(%rdi)\n"
@@ -1279,7 +1280,6 @@ namespace coro::detail
         "  movq 16(%rsi), %rbp\n"
         "  movq 8(%rsi), %rsp\n"
         "  jmpq *(%rsi)\n"
-        "  ret\n"
 #ifndef __MACH__
         ".size _mco_switch, .-_mco_switch\n"
 #endif
