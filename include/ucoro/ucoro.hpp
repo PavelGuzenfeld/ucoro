@@ -1,8 +1,8 @@
-// ucoro.hpp - C++23 wrapper for ucoro
+// ucoro.hpp - C++23 wrapper for minicoro
 // Single-header implementation. Define UCORO_IMPL in *one* source file.
 //
-// SPDX-License-Identifier: MIT OR Unlicense
-// Original C library: Eduardo Bart (https://github.com/edubart/ucoro)
+// SPDX-License-Identifier: MIT
+// Original C library: Eduardo Bart (https://github.com/edubart/minicoro)
 
 #pragma once
 

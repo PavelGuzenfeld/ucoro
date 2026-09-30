@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 project(ucoro
-    VERSION 0.0.1
+    VERSION 0.1.0
     DESCRIPTION "ucoro coroutine library"
     LANGUAGES CXX
 )

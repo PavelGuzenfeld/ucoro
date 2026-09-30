@@ -1,6 +1,6 @@
 # µcoro Roadmap
 
-Current version: **0.0.1** (production-ready)
+Current version: **0.1.0**. Maintenance only; the milestones below are on hold.
 
 ## Version 0.0.1 — Production-Ready Release ✓
 
