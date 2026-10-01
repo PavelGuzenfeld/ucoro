@@ -866,19 +866,21 @@ namespace coro::detail
 
     MCO_ASM_BLOB static unsigned char _mco_switch_code[] = {
         0x48,
-        0x8d,
-        0x05,
-        0x3e,
-        0x01,
-        0x00,
-        0x00, /* lea    0x13e(%rip),%rax    */
+        0x8b,
+        0x04,
+        0x24, /* mov    (%rsp),%rax         */
         0x48,
         0x89,
         0x01, /* mov    %rax,(%rcx)         */
-        0x48,
+        0x4c,
+        0x8d,
+        0x4c,
+        0x24,
+        0x08, /* lea    0x8(%rsp),%r9       */
+        0x4c,
         0x89,
-        0x61,
-        0x08, /* mov    %rsp,0x8(%rcx)      */
+        0x49,
+        0x08, /* mov    %r9,0x8(%rcx)       */
         0x48,
         0x89,
         0x69,
@@ -1190,7 +1192,6 @@ namespace coro::detail
         0x08, /* mov    0x8(%rdx),%rsp      */
         0xff,
         0x22, /* jmpq   *(%rdx)             */
-        0xc3, /* retq                       */
         0x90,
         0x90,
         0x90,
@@ -1262,9 +1263,10 @@ namespace coro::detail
         ".hidden _mco_switch\n"
         "_mco_switch:\n"
 #endif
-        "  leaq 0x3d(%rip), %rax\n"
+        "  movq (%rsp), %rax\n"
         "  movq %rax, (%rdi)\n"
-        "  movq %rsp, 8(%rdi)\n"
+        "  leaq 8(%rsp), %rdx\n"
+        "  movq %rdx, 8(%rdi)\n"
         "  movq %rbp, 16(%rdi)\n"
         "  movq %rbx, 24(%rdi)\n"
         "  movq %r12, 32(%rdi)\n"
@@ -1279,7 +1281,6 @@ namespace coro::detail
         "  movq 16(%rsi), %rbp\n"
         "  movq 8(%rsi), %rsp\n"
         "  jmpq *(%rsi)\n"
-        "  ret\n"
 #ifndef __MACH__
         ".size _mco_switch, .-_mco_switch\n"
 #endif

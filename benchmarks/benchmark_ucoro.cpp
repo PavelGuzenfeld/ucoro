@@ -24,7 +24,7 @@ class benchmark
 {
 public:
     using clock = std::chrono::high_resolution_clock;
-    using duration = std::chrono::nanoseconds;
+    using duration = std::chrono::duration<double, std::nano>;
 
     struct result
     {
@@ -45,31 +45,36 @@ public:
         F &&func) -> result
     {
         std::vector<duration> times;
-        times.reserve(iterations);
+        constexpr std::size_t batch_count = 100;
+        std::size_t const batch_size = std::max(iterations / batch_count, std::size_t{1});
+        times.reserve(batch_count);
 
         for (std::size_t i = 0; i < std::min(iterations / 10, std::size_t{100}); ++i)
         {
             func();
         }
 
-        for (std::size_t i = 0; i < iterations; ++i)
+        for (std::size_t b = 0; b < batch_count; ++b)
         {
             auto const start = clock::now();
-            func();
+            for (std::size_t i = 0; i < batch_size; ++i)
+            {
+                func();
+            }
             auto const end = clock::now();
-            times.push_back(std::chrono::duration_cast<duration>(end - start));
+            times.push_back(duration{end - start} / static_cast<double>(batch_size));
         }
 
         std::ranges::sort(times);
 
-        auto const total = std::accumulate(times.begin(), times.end(), duration{});
-        auto const mean = total / iterations;
-        auto const median = times[iterations / 2];
+        auto const total = std::accumulate(times.begin(), times.end(), duration{}) * static_cast<double>(batch_size);
+        auto const mean = total / static_cast<double>(batch_count * batch_size);
+        auto const median = times[batch_count / 2];
         auto const min = times.front();
         auto const max = times.back();
 
         auto const seconds = std::chrono::duration<double>(total).count();
-        auto const ops = static_cast<double>(iterations) / seconds;
+        auto const ops = static_cast<double>(batch_count * batch_size) / seconds;
 
         return {
             .name = std::string{name},
