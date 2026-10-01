@@ -4,6 +4,12 @@ ucoro is maintenance-only. Bug fixes and platform fixes are accepted; no new fea
 
 ## Released
 
+### 0.1.1
+
+- x86-64 context switch on Linux, macOS and Windows returns directly instead of through a mispredicted `ret`: unchecked round trip 20 to 6.4 ns on Linux x64 (#12), 30 to 18 ns on Windows under Wine (#15)
+- `benchmark_ucoro` times batches instead of single switches
+- Documentation site at https://pavelguzenfeld.com/ucoro/
+
 ### 0.1.0
 
 - Upstream credit corrected to minicoro; licensing aligned on MIT
